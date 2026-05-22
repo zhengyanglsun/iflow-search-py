@@ -4,11 +4,21 @@ Python SDK for **iFlow Search (心流搜索)** — a search API that exposes web
 
 - **Product:** <https://platform.iflow.cn/>
 - **API docs:** <https://platform.iflow.cn/docs/>
-- **Status:** alpha. The package is published as a PEP 440 pre-release (`0.1.0a0`), the Python analog of npm's `next` dist-tag.
+- **Status:** alpha pre-release (`0.1.0a0`). PyPI release is pending — once published, this package will require `--pre` to install (the Python analog of npm's `next` dist-tag).
 
-This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. Adapter packages (LangChain, MCP, FastAPI/OpenAPI) will be published separately and depend on this one.
+This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. Adapter packages (LangChain, MCP, FastAPI/OpenAPI) are planned and will depend on this one.
 
 ## Install
+
+PyPI release is pending. For local development:
+
+```bash
+git clone https://github.com/zhengyanglsun/iflow-search-py.git
+cd iflow-search-py/packages/iflow-search
+python -m pip install -e ".[dev]"
+```
+
+Once published to PyPI:
 
 ```bash
 pip install --pre iflow-search
@@ -99,13 +109,17 @@ IFlowError
 Every exception carries `code` (stable string), `message`, `request` (`{method, url, endpoint}`), and `response_body_truncated` (first 500 chars when applicable). Switch on `code` rather than class identity if you want a stable contract across SDK versions.
 
 ```python
-from iflow_search import IFlowSearchClient, IFlowRateLimitError
+from iflow_search import IFlowSearchClient, IFlowError, IFlowRateLimitError
 
-client = IFlowSearchClient(api_key=...)
+# Reads IFLOW_API_KEY from the environment.
+client = IFlowSearchClient()
+
 try:
-    client.web_search(query="...")
-except IFlowRateLimitError as exc:
-    print("rate limited", exc.code, exc.response_body_truncated)
+    result = client.web_search(query="latest LLM benchmarks", count=3)
+except IFlowRateLimitError:
+    print("Rate limit exceeded")
+except IFlowError as exc:
+    print(f"iFlow error: {exc.code} {exc.message}")
 ```
 
 `asyncio.CancelledError` is **not** wrapped — it propagates as itself so cooperative cancellation keeps working.
@@ -134,6 +148,34 @@ The raw envelope is preserved on `response.raw` for callers that need fields the
 - **Never commit API keys.** Use environment variables (`IFLOW_API_KEY`) or your platform's secret manager.
 - The SDK does not auto-load `.env` files and does not read the key from any filesystem path other than the process environment.
 - Tests in this repository use fake keys (literal `test-key`) and `httpx.MockTransport` — no real API is contacted, ever.
+
+## Local development
+
+From `packages/iflow-search/`:
+
+```bash
+python -m pytest -q                    # offline test suite
+python -m ruff check .                 # lint
+python -m mypy src/iflow_search        # strict typecheck
+python -m build                        # build sdist + wheel into dist/
+```
+
+## Real-API smoke
+
+A separate opt-in script exercises all three endpoints against the live API:
+
+```bash
+export IFLOW_API_KEY="your-api-key"
+export IFLOW_SMOKE=1
+python scripts/smoke_real_api.py
+```
+
+The script:
+
+- Is **opt-in** — without `IFLOW_SMOKE=1` it refuses to call the live API.
+- Reads `IFLOW_API_KEY` from the environment only — never from disk.
+- Redacts the key in all log output.
+- Does not write any file.
 
 ## Future packages
 
