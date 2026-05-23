@@ -5,18 +5,21 @@ on:
   push:
     branches: [main]
 
-defaults:
-  run:
-    working-directory: packages/iflow-search
-
 jobs:
   test:
-    name: test (py${{ matrix.python-version }})
+    name: test (${{ matrix.package }}, py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        package:
+          - iflow-search
+          - iflow-search-mcp
+          - iflow-search-langchain
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: packages/iflow-search/pyproject.toml
+          cache-dependency-path: packages/${{ matrix.package }}/pyproject.toml
 
       - name: Install dependencies
         run: |
@@ -37,7 +40,7 @@ jobs:
         run: python -m ruff check .
 
       - name: Typecheck (mypy strict)
-        run: python -m mypy src/iflow_search
+        run: python -m mypy src/$(echo "${{ matrix.package }}" | tr - _)
 
       - name: Tests (pytest)
         run: python -m pytest -q
