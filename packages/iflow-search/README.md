@@ -4,27 +4,25 @@ Python SDK for **iFlow Search (心流搜索)** — a search API that exposes web
 
 - **Product:** <https://platform.iflow.cn/>
 - **API docs:** <https://platform.iflow.cn/docs/>
-- **Status:** alpha pre-release (`0.1.0a0`). PyPI release is pending — once published, this package will require `--pre` to install (the Python analog of npm's `next` dist-tag).
+- **Status:** alpha pre-release (`0.1.0a0`), published on PyPI. Requires `--pre` to install — the Python analog of npm's `next` dist-tag.
 
-This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. Adapter packages (LangChain, MCP, FastAPI/OpenAPI) are planned and will depend on this one.
+This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. The MCP adapter (`iflow-search-mcp`) ships from the same repository and depends on this package; LangChain and FastAPI/OpenAPI adapters are planned.
 
 ## Install
-
-PyPI release is pending. For local development:
-
-```bash
-git clone https://github.com/zhengyanglsun/iflow-search-py.git
-cd iflow-search-py/packages/iflow-search
-python -m pip install -e ".[dev]"
-```
-
-Once published to PyPI:
 
 ```bash
 pip install --pre iflow-search
 ```
 
 `--pre` is required while the version is still a pre-release. Without it, `pip` will report "no matching distribution".
+
+For local development:
+
+```bash
+git clone https://github.com/zhengyanglsun/iflow-search-py.git
+cd iflow-search-py/packages/iflow-search
+python -m pip install -e ".[dev]"
+```
 
 ## Quick start (sync)
 
@@ -177,13 +175,13 @@ The script:
 - Redacts the key in all log output.
 - Does not write any file.
 
-## Future packages
+## Adapter packages
 
-This package is the core. The planned adapter packages — none of which exist yet — will each depend on this one:
+This package is the core. Adapter packages depend on it and live in the same repository:
 
-- `iflow-search-langchain` — LangChain (and LangGraph) tools.
-- `iflow-search-mcp` — MCP stdio server for Claude Code / Claude Desktop / Hermes / iFlow CLI.
-- `iflow-search-openapi` — FastAPI OpenAPI server for Open WebUI / Coze.
+- `iflow-search-mcp` — **published** on PyPI. MCP stdio server for Claude Code / Claude Desktop / Hermes / iFlow CLI. Install with `pip install --pre iflow-search-mcp`.
+- `iflow-search-langchain` — planned. LangChain (and LangGraph) tools.
+- `iflow-search-openapi` — planned. FastAPI OpenAPI server for Open WebUI / Coze.
 
 ## License
 

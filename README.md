@@ -2,7 +2,7 @@
 
 Python SDK for the **iFlow Search API (心流搜索 API)** — web search, image search, and web-page fetching, returning structured data suitable for use by LLMs and AI agents.
 
-This is the framework-agnostic core SDK. Adapter packages (LangChain, MCP, OpenAPI) are planned and will live in this same repository under `packages/`.
+The framework-agnostic core SDK and the MCP adapter both ship from this repository. Additional adapter packages (LangChain, OpenAPI) are planned and will live in `packages/` as siblings.
 
 ## Links
 
@@ -13,16 +13,20 @@ This is the framework-agnostic core SDK. Adapter packages (LangChain, MCP, OpenA
 
 ## Status
 
-- ✅ Core SDK implemented (`packages/iflow-search/`)
+- ✅ Core SDK implemented (`packages/iflow-search/`) — published on PyPI as `iflow-search==0.1.0a0`
 - ✅ Sync and async clients
 - ✅ Real-API smoke verified for all three endpoints
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
-- ⏳ PyPI release pending
-- ⏳ Planned adapters (not yet implemented): `iflow-search-langchain`, `iflow-search-mcp`, `iflow-search-openapi`
+- ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0a0`
+- ⏳ Planned adapters (not yet implemented): `iflow-search-langchain`, `iflow-search-openapi`
 
 ## Installation
 
-PyPI release is pending.
+```bash
+pip install --pre iflow-search
+```
+
+`--pre` is required while the version is still a PEP 440 pre-release (`0.1.0a0`). Without it, `pip` will report "no matching distribution".
 
 For local development:
 
@@ -31,14 +35,6 @@ git clone https://github.com/zhengyanglsun/iflow-search-py.git
 cd iflow-search-py/packages/iflow-search
 python -m pip install -e ".[dev]"
 ```
-
-After the first PyPI release, install with:
-
-```bash
-pip install --pre iflow-search
-```
-
-`--pre` is required while the version is still a PEP 440 pre-release (`0.1.0a0`). Without it, `pip` will report "no matching distribution".
 
 ## Configuration
 
@@ -110,7 +106,7 @@ The SDK sends the following headers on every request:
 | `IFlow-Integration-Version` | installed package version |
 | `User-Agent` | `<integration_name>/<integration_version>` |
 
-The MCP adapter (planned) will additionally emit:
+The MCP adapter additionally emits, when the host sets the corresponding env vars:
 
 - `IFlow-MCP-Client`
 - `IFlow-MCP-Client-Version`
@@ -121,12 +117,20 @@ The MCP adapter (planned) will additionally emit:
 
 ```
 iflow-search-py/
-├── docs/design/python-sdk-design.md   ← public design document
+├── docs/design/python-sdk-design.md    ← core design document
+├── docs/design/python-mcp-design.md    ← MCP adapter design document
 ├── packages/
-│   └── iflow-search/                   ← core SDK (this is what ships to PyPI)
-│       ├── src/iflow_search/
+│   ├── iflow-search/                   ← core SDK (PyPI: iflow-search)
+│   │   ├── src/iflow_search/
+│   │   ├── tests/
+│   │   ├── scripts/smoke_real_api.py
+│   │   ├── pyproject.toml
+│   │   ├── README.md                   ← PyPI long_description
+│   │   └── LICENSE
+│   └── iflow-search-mcp/               ← MCP stdio server (PyPI: iflow-search-mcp)
+│       ├── src/iflow_search_mcp/
 │       ├── tests/
-│       ├── scripts/smoke_real_api.py
+│       ├── scripts/smoke_stdio.py
 │       ├── pyproject.toml
 │       ├── README.md                   ← PyPI long_description
 │       └── LICENSE
@@ -162,15 +166,39 @@ The smoke script:
 - Redacts the key in all log output.
 - Does not write any file.
 
-## Roadmap
+## Adapters
 
-Planned (not yet implemented) packages:
+### `iflow-search-mcp` — published
+
+MCP stdio server for use by Claude Code, Claude Desktop, Hermes, and other MCP-capable hosts. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as MCP tools over the official Python `mcp` SDK.
+
+```bash
+pip install --pre iflow-search-mcp
+```
+
+Configure your MCP host to launch the `iflow-search-mcp` console script. Example for Claude Desktop's `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "iflow-search": {
+      "command": "iflow-search-mcp",
+      "env": {
+        "IFLOW_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+Recognised env vars: `IFLOW_API_KEY` (required), `IFLOW_BASE_URL`, `IFLOW_TIMEOUT_MS`, `IFLOW_MCP_CLIENT`, `IFLOW_MCP_CLIENT_VERSION`. The package's own README covers per-host config and the full tool schemas; see `docs/design/python-mcp-design.md` for the design rationale.
+
+### Planned
 
 - `iflow-search-langchain` — LangChain tools (LangGraph reuses these; no separate package).
-- `iflow-search-mcp` — MCP stdio server for use by Claude Code, Claude Desktop, Hermes, and other MCP-capable hosts.
 - `iflow-search-openapi` — FastAPI / OpenAPI server for Open WebUI, Coze, and similar platforms.
 
-See `docs/design/python-sdk-design.md` for the design rationale.
+See `docs/design/python-sdk-design.md` for the core design rationale.
 
 ## License
 

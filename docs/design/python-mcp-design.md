@@ -396,3 +396,69 @@ Hand-rolled `tools/list` + `tools/call` dispatch over the low-level `Server` giv
 ### 13.7 No public embedding API in MVP
 
 The package exports `__version__` only. `build_server`, the tool registry, and the error mappers are internal. This minimizes the public surface that becomes a compatibility contract. Internals can be promoted to public exports when a concrete user asks for them.
+
+## 14. Release verification — `0.1.0a0` (2026-05-23)
+
+Record of what was verified for the first published release of `iflow-search-mcp`. Kept here so future maintainers can see what the bar was and where the artifacts came from.
+
+### 14.1 Artifacts
+
+Both files were built once locally with `python -m build` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_mcp-0.1.0a0-py3-none-any.whl` | 14,454 B | `97199ffed104cc8fa61cdeeca7eae2933c51ce7372750809cd593ea753eb3c57` |
+| `iflow_search_mcp-0.1.0a0.tar.gz` | 9,298 B | `5e81a9df143d8dbf50f6a85bced777f03e9d3d555155450cc0857d57a533f153` |
+
+Hashes were compared against the `digests.sha256` field returned by the TestPyPI and PyPI JSON APIs (`/pypi/iflow-search-mcp/0.1.0a0/json`) at each hop. All four digests match.
+
+### 14.2 Cold-install matrix
+
+For each source, a fresh Python 3.11 venv was created in `/tmp`, the package was installed with `pip install --pre`, and `iflow_search_mcp.__file__` was asserted to resolve under that venv's `site-packages/` (proving the wheel artifact was being tested, not an editable install of the working copy).
+
+| Source | Index URL | Provenance check | Live smoke |
+|---|---|---|---|
+| Local wheel | `file:///…/packages/iflow-search-mcp/dist/` | ✅ | ✅ |
+| TestPyPI | `https://test.pypi.org/simple/` + PyPI as `--extra-index-url` for deps | ✅ | ✅ |
+| PyPI | default index | ✅ | ✅ |
+
+The TestPyPI install uses PyPI as `--extra-index-url` because the dependency `iflow-search==0.1.0a0` only exists on PyPI; TestPyPI cannot resolve it on its own.
+
+### 14.3 Real-client smoke
+
+Hermes Agent (v0.14.0) was used as a third-party MCP host for each venv plus the pre-publish source checkout — four runs total. The Hermes config (`~/.hermes/config.yaml`) was modified to add a temporary `mcp_servers:` entry pointing at the venv's `iflow-search-mcp` console script, then reverted byte-identically after each run.
+
+Each smoke verified:
+
+- `initialize` succeeds.
+- `tools/list` returns exactly `["iflow_web_search", "iflow_image_search", "iflow_web_fetch"]`.
+- All three tools invoke successfully against the live iFlow API with a real `IFLOW_API_KEY` set only in the env block (never on the command line, never in the repo).
+- `structuredContent` uses snake_case end-to-end (`image_url`, `source_url`, `from_cache`, `took_ms`).
+- The only stderr emission from the subprocess is the startup banner `[iflow-search-mcp] vX.Y.Z ready on stdio.` — no stdout pollution, JSON-RPC framing intact.
+- No occurrence of the literal `sk-` prefix in any captured log file (greps returned 0 hits).
+
+### 14.4 Attribution headers on the wire
+
+Beyond the offline smoke (`scripts/smoke_stdio.py`), the live smoke confirmed that real iFlow API responses arrived without auth errors when:
+
+- `IFLOW_API_KEY` was supplied via the host env block,
+- `IFLOW_MCP_CLIENT` and `IFLOW_MCP_CLIENT_VERSION` were supplied to identify Hermes,
+
+establishing that `Authorization`, `IFlow-Source: mcp`, `IFlow-Integration: iflow-search-mcp`, `IFlow-Integration-Version: 0.1.0a0`, `IFlow-MCP-Client: hermes`, and `IFlow-MCP-Client-Version: 0.14.0` all reached the server end-to-end.
+
+### 14.5 Tag convention
+
+A namespaced git tag was created and pushed for this release:
+
+```
+iflow-search-mcp/v0.1.0a0  →  commit 6debef0
+```
+
+The repository already had an unnamespaced `v0.1.0a0` tag claimed by the core SDK (`iflow-search==0.1.0a0`). Rather than rename the legacy tag, the convention going forward is `<package-name>/v<version>` for every package in this monorepo. The legacy core tag is left in place as a historical artifact.
+
+### 14.6 Constraints honoured throughout
+
+- No real API key was ever written to the repository, committed to git, or printed to stdout.
+- No `.env` file or other on-disk credential store was introduced.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts; no post-build modification.
+- No CI workflow was modified to publish — every upload to TestPyPI/PyPI was a manual, audited `twine upload`.
