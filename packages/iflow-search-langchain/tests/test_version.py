@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
-import tomllib
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from iflow_search_langchain._version import __version__
 
