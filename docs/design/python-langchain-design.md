@@ -431,3 +431,82 @@ LangSmith tracing happens automatically through LangChain's `BaseTool` callbacks
 ### 15.11 Adapter-only real smoke; no LLM provider coupling
 
 The smoke script invokes each tool directly against the live API and verifies the `(content, artifact)` shape. It does not build a `create_react_agent`, does not import any LLM provider, and does not assume any tool-calling LLM is reachable. The adapter's contract is "this tool is shaped correctly for LangChain to consume"; whether a given LLM picks the right tool is the user's prompt-engineering concern, downstream of this contract.
+
+## 16. Release verification — `0.1.0a0` (2026-05-24)
+
+Record of what was verified for the first published release of `iflow-search-langchain`. Kept here so future maintainers can see what the bar was and where the artifacts came from. Mirrors §14 of the MCP design doc.
+
+### 16.1 Artifacts
+
+Both files were built once locally with `python -m build` from commit `4270538` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_langchain-0.1.0a0-py3-none-any.whl` | 11,929 B | `5d33ca3638fb7cfe10bdaac0eef14c97f352e81a1c62ce3ec45f71176efe49f8` |
+| `iflow_search_langchain-0.1.0a0.tar.gz` | 8,879 B | `2458692a2ace01e7f1550ae01a79a488acf1ac7d31e012c327d117c8c74b5e00` |
+
+Hashes were compared against the `digests.sha256` field returned by the TestPyPI and PyPI JSON APIs (`/pypi/iflow-search-langchain/0.1.0a0/json`) at each hop. All four digests match.
+
+### 16.2 CI gate
+
+GitHub Actions run [`26359768591`](https://github.com/zhengyanglsun/iflow-search-py/actions/runs/26359768591) on commit `4270538` was the green CI that unblocked the publish flow. It exercised the full package matrix:
+
+| Package | Python versions | Result |
+|---|---|---|
+| `iflow-search` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-mcp` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-langchain` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+
+12/12 jobs ran ruff, mypy strict, pytest, and `python -m build`. No CI job uploads anywhere — publishing is manual `twine upload` only (§14.2).
+
+The preceding push (`05efdbf`) had failed CI on `iflow-search-langchain, py3.10` because `tests/test_version.py` used the 3.11-only stdlib `tomllib`. Fix `4270538` added `tomli>=2.0; python_version<'3.11'` to the dev extras and gated the import on `sys.version_info >= (3, 11)`. No other package's tests touch `tomllib`; this gotcha is langchain-only because only this adapter's tests assert the published `__version__` matches `pyproject.toml`.
+
+### 16.3 Cold-install matrix
+
+For each source, a fresh Python 3.12 venv was created in `/var/folders/.../iflow-langchain-*`, the package was installed with `pip install --pre iflow-search-langchain==0.1.0a0`, and both an **offline import smoke** (no `IFLOW_API_KEY` set) and the **real-API smoke** (`scripts/smoke_real_api.py` with `IFLOW_LANGCHAIN_SMOKE=1`) were run.
+
+| Source | Index URL | Offline smoke | Real-API smoke |
+|---|---|---|---|
+| Local wheel | `file:///…/packages/iflow-search-langchain/dist/` | ✅ | ✅ (from source tree) |
+| TestPyPI | `https://test.pypi.org/simple/` + PyPI as `--extra-index-url` for deps | ✅ | ✅ (from cold venv) |
+| PyPI | default index | ✅ | ✅ (from cold venv) |
+
+The TestPyPI install uses PyPI as `--extra-index-url` because the runtime dependency `iflow-search==0.1.0a0` only exists on PyPI; TestPyPI cannot resolve it on its own. The same reasoning applies to `langchain-core` and `pydantic`.
+
+Offline smoke asserted: `import iflow_search_langchain` succeeds with no API key set, `__all__` exposes exactly the four factories plus `__version__`, and `create_iflow_web_search_tool()` raises `IFlowConfigError(code="missing_api_key")` at factory-call time rather than at first invocation.
+
+### 16.4 Real-API smoke — what was verified end-to-end
+
+`scripts/smoke_real_api.py` exercised all three tools against the live iFlow API from each venv. The script reads `IFLOW_API_KEY` from the environment only, redacts the key in all log output (first 4 chars + `***` + last 2), writes no files, and refuses to run without `IFLOW_LANGCHAIN_SMOKE=1`.
+
+Per §15.11, the smoke does **not** build an agent and does **not** import LangGraph or any LLM provider. What it verifies is the adapter contract:
+
+- `iflow_web_search._run(query="hello world", count=2)` → 2 results, non-empty `(content, artifact)` tuple with `artifact["raw"]` present.
+- `iflow_image_search._run(query="cat", count=2)` → 2 images, `artifact["images"]` populated.
+- `iflow_web_fetch._run(url="https://example.com")` → `artifact["title"] == "Example Domain"`.
+
+All three passed from the source tree, the TestPyPI cold venv, and the PyPI cold venv (9 successful tool invocations total against the live API).
+
+### 16.5 Attribution headers on the wire
+
+The offline test suite (`tests/test_attribution.py`) already proves that auto-built clients emit `IFlow-Source: langchain`, `IFlow-Integration: iflow-search-langchain`, `IFlow-Integration-Version: 0.1.0a0` against an `httpx.MockTransport` recorder, and that caller-supplied clients pass through unchanged (per §11.2). The live smoke would have failed with `IFlowAuthError` if attribution had broken the request — it succeeded, confirming the headers reached the server end-to-end.
+
+### 16.6 Tag convention
+
+A namespaced git tag was created and pushed for this release, matching the `iflow-search-mcp` precedent (§14.5 of the MCP design):
+
+```
+iflow-search-langchain/v0.1.0a0  →  commit 4270538
+```
+
+The convention `<package-name>/v<version>` is now established for every package in this monorepo. The legacy unnamespaced `v0.1.0a0` tag remains in place for the core `iflow-search` release.
+
+### 16.7 Constraints honoured throughout
+
+- No real API key was ever written to the repository, committed to git, or printed to stdout. The smoke output shows only the redacted form `sk-e***16`.
+- No `.env` file or other on-disk credential store was introduced. `IFLOW_API_KEY` was sourced from the developer's shell environment only.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts; the four sha256 digests (local / TestPyPI / PyPI for each of wheel and sdist) all match.
+- No CI workflow was modified to publish. Every upload to TestPyPI and PyPI was a manual, audited `twine upload`.
+- `~/.pypirc` was created and edited by the developer in their own editor with tokens never entering tool I/O; the only filesystem checks performed against it were `test -f` and `stat -f %A` (mode = 600), never `cat` / `head` / `less` / `grep`.
+- `DEEPSEEK_API_KEY` was not read at any point in the release flow; the LangChain adapter has no LLM-provider coupling (§15.11).
+- Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.

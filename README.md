@@ -2,7 +2,7 @@
 
 Python SDK for the **iFlow Search API (心流搜索 API)** — web search, image search, and web-page fetching, returning structured data suitable for use by LLMs and AI agents.
 
-The framework-agnostic core SDK and the MCP adapter both ship from this repository. Additional adapter packages (LangChain, OpenAPI) are planned and will live in `packages/` as siblings.
+The framework-agnostic core SDK, the MCP adapter, and the LangChain adapter all ship from this repository. The remaining planned adapter (OpenAPI) will live in `packages/` as a sibling.
 
 ## Links
 
@@ -18,7 +18,8 @@ The framework-agnostic core SDK and the MCP adapter both ship from this reposito
 - ✅ Real-API smoke verified for all three endpoints
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0a0`
-- ⏳ Planned adapters (not yet implemented): `iflow-search-langchain`, `iflow-search-openapi`
+- ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0a0`
+- ⏳ Planned adapter (not yet implemented): `iflow-search-openapi`
 
 ## Installation
 
@@ -117,22 +118,30 @@ The MCP adapter additionally emits, when the host sets the corresponding env var
 
 ```
 iflow-search-py/
-├── docs/design/python-sdk-design.md    ← core design document
-├── docs/design/python-mcp-design.md    ← MCP adapter design document
+├── docs/design/python-sdk-design.md       ← core design document
+├── docs/design/python-mcp-design.md       ← MCP adapter design document
+├── docs/design/python-langchain-design.md ← LangChain adapter design document
 ├── packages/
-│   ├── iflow-search/                   ← core SDK (PyPI: iflow-search)
+│   ├── iflow-search/                      ← core SDK (PyPI: iflow-search)
 │   │   ├── src/iflow_search/
 │   │   ├── tests/
 │   │   ├── scripts/smoke_real_api.py
 │   │   ├── pyproject.toml
-│   │   ├── README.md                   ← PyPI long_description
+│   │   ├── README.md                      ← PyPI long_description
 │   │   └── LICENSE
-│   └── iflow-search-mcp/               ← MCP stdio server (PyPI: iflow-search-mcp)
-│       ├── src/iflow_search_mcp/
+│   ├── iflow-search-mcp/                  ← MCP stdio server (PyPI: iflow-search-mcp)
+│   │   ├── src/iflow_search_mcp/
+│   │   ├── tests/
+│   │   ├── scripts/smoke_stdio.py
+│   │   ├── pyproject.toml
+│   │   ├── README.md                      ← PyPI long_description
+│   │   └── LICENSE
+│   └── iflow-search-langchain/            ← LangChain adapter (PyPI: iflow-search-langchain)
+│       ├── src/iflow_search_langchain/
 │       ├── tests/
-│       ├── scripts/smoke_stdio.py
+│       ├── scripts/smoke_real_api.py
 │       ├── pyproject.toml
-│       ├── README.md                   ← PyPI long_description
+│       ├── README.md                      ← PyPI long_description
 │       └── LICENSE
 └── .github/workflows/ci.yml
 ```
@@ -193,9 +202,26 @@ Configure your MCP host to launch the `iflow-search-mcp` console script. Example
 
 Recognised env vars: `IFLOW_API_KEY` (required), `IFLOW_BASE_URL`, `IFLOW_TIMEOUT_MS`, `IFLOW_MCP_CLIENT`, `IFLOW_MCP_CLIENT_VERSION`. The package's own README covers per-host config and the full tool schemas; see `docs/design/python-mcp-design.md` for the design rationale.
 
+### `iflow-search-langchain` — published
+
+LangChain `BaseTool` factories for `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch`. LangGraph consumes these tools directly (`create_react_agent`, `ToolNode`), so there is no separate `iflow-search-langgraph` package.
+
+```bash
+pip install --pre iflow-search-langchain
+```
+
+```python
+import os
+from iflow_search_langchain import create_iflow_search_tools
+
+tools = create_iflow_search_tools(api_key=os.environ["IFLOW_API_KEY"])
+# [iflow_web_search, iflow_image_search, iflow_web_fetch] — wire into your agent.
+```
+
+Each tool uses `response_format="content_and_artifact"`: `_run` / `_arun` return `(content: str, artifact: dict)`. Auto-built clients carry `IFlow-Source: langchain` attribution; caller-supplied clients are not mutated. The package's own README covers configuration, attribution, lifecycle, and the LangGraph example; see `docs/design/python-langchain-design.md` for the design rationale.
+
 ### Planned
 
-- `iflow-search-langchain` — LangChain tools (LangGraph reuses these; no separate package).
 - `iflow-search-openapi` — FastAPI / OpenAPI server for Open WebUI, Coze, and similar platforms.
 
 See `docs/design/python-sdk-design.md` for the core design rationale.
