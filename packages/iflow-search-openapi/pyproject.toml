@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "iflow-search-openapi"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "OpenAPI 3.1 tool server for iFlow Search (心流搜索) — drop-in for Open WebUI, Coze, and other platforms that consume OpenAPI tool catalogues."
 readme = "README.md"
 license = { file = "LICENSE" }
