@@ -77,6 +77,7 @@ def build_router(
 
     @router.post(
         "/tools/iflow_web_search",
+        operation_id="iflow_web_search",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
     )
@@ -94,6 +95,7 @@ def build_router(
 
     @router.post(
         "/tools/iflow_image_search",
+        operation_id="iflow_image_search",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
     )
@@ -111,6 +113,7 @@ def build_router(
 
     @router.post(
         "/tools/iflow_web_fetch",
+        operation_id="iflow_web_fetch",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
     )

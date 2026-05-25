@@ -48,6 +48,22 @@ async def test_openapi_lists_three_tool_paths(
 
 
 @pytest.mark.asyncio
+async def test_operation_ids_are_stable_tool_names(
+    client_factory: Callable[..., tuple],
+) -> None:
+    # Open WebUI and Coze dispatch tools by OpenAPI operationId — that's the
+    # name surfaced to the consuming LLM. FastAPI defaults derive ugly IDs
+    # like "web_search_tools_iflow_web_search_post" from the handler name;
+    # we pin explicit IDs so the LLM sees iflow_web_search / iflow_image_search
+    # / iflow_web_fetch on every host. See platform-smoke report 2026-05-25.
+    test_client, _core, _rec = client_factory(upstream_handler=_upstream_ok)
+    paths = (await test_client.get("/openapi.json")).json()["paths"]
+    assert paths["/tools/iflow_web_search"]["post"]["operationId"] == "iflow_web_search"
+    assert paths["/tools/iflow_image_search"]["post"]["operationId"] == "iflow_image_search"
+    assert paths["/tools/iflow_web_fetch"]["post"]["operationId"] == "iflow_web_fetch"
+
+
+@pytest.mark.asyncio
 async def test_request_body_schema_web_search(
     client_factory: Callable[..., tuple],
 ) -> None:
