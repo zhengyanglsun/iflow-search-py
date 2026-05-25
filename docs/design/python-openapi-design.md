@@ -919,3 +919,187 @@ Both tags point at `chore(openapi): bump version to ...` commits whose artifacts
 - `DEEPSEEK_API_KEY` was not read at any point in the release flow.
 - Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
 - The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag creation and tag push were paused on the same gate.
+
+## 21. Release verification — `0.1.0a2` (2026-05-25)
+
+Patch prerelease of the OpenAPI adapter. Single behaviour change: the three tool routes now declare explicit FastAPI `response_model=` (`WebSearchSuccess` / `ImageSearchSuccess` / `WebFetchSuccess`) so the canonical `/openapi.json` emits non-empty object schemas for the 200 responses. Before this release the 200 schemas were the literal `{}` (FastAPI's default when a route returns `JSONResponse` without a declared model) — accepted by Open WebUI but rejected by Coze's importer, which requires a typed 200 schema to register the action. The matching `*Body` request schemas were already correct from `0.1.0a0`; only the success-response side of the contract changed.
+
+Runtime payload is byte-for-byte unchanged: handlers still return `JSONResponse(_success(data))` directly, so Pydantic does **not** re-serialise the envelope through the declared `response_model`. The runtime envelope is whatever the core SDK's response models produced via `model_dump(mode="json", by_alias=False, exclude={"raw"})`, wrapped in `{"ok": True, "data": ...}` — identical to `0.1.0a0` and `0.1.0a1`. The declared models exist solely to populate the canonical OpenAPI schema; that single-source-of-truth is the property that made FastAPI worth choosing in §4.2.
+
+No protocol surface, public Python API, configuration, or wire-attribution change between `0.1.0a1` and `0.1.0a2`. Core SDK dependency floor unchanged (`iflow-search>=0.1.0a0,<0.2`).
+
+Code change: `0a00470 fix(openapi): declare response models on tool routes` (adds `_schemas.py` response models, decorates the three `@router.post(...)` calls in `_routes.py` with `response_model=`, and adds regression tests in `tests/test_openapi_schema.py` asserting non-empty 200 schemas with the expected `data` field shape). Version bump: `825ba42 chore(openapi): bump version to 0.1.0a2`.
+
+### 21.1 Artifacts
+
+Both files were built once locally with `python -m build` from commit `825ba42` and uploaded byte-identically to TestPyPI and then PyPI. `hatchling`'s reproducible build means three independent rebuilds during this release flow (local-gate, TestPyPI prep, PyPI prep) all produced the same digests.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_openapi-0.1.0a2-py3-none-any.whl` | 25,737 B | `db8056bdb74f10b891db09d36be4aadd9286f4f46c1219b630c57173aba3c20e` |
+| `iflow_search_openapi-0.1.0a2.tar.gz` | 19,444 B | `153fd5fe23c387234c58ee9bf125e7d7c99d6e1c7f61844cc7da38bde28227d5` |
+
+Sizes are ~1.4 KB above `0.1.0a1` (§20.1: wheel 24,297 B, sdist 18,162 B) — accounted for by `_schemas.py` (8 new response classes plus their docstring) and the matching regression-test code.
+
+Sha256s were cross-checked against PyPI's `/pypi/iflow-search-openapi/0.1.0a2/json` endpoint after upload. Both digests on the PyPI side match the local digests exactly. Each cold-install venv (local wheel, TestPyPI, PyPI) then served as a behavioural cross-check (correct `__version__`, console script present, schema/auth/CORS/smoke green) rather than a re-hash.
+
+PyPI URL: <https://pypi.org/project/iflow-search-openapi/0.1.0a2/>
+TestPyPI URL: <https://test.pypi.org/project/iflow-search-openapi/0.1.0a2/>
+
+### 21.2 CI gate
+
+GitHub Actions run [`26398479661`](https://github.com/zhengyanglsun/iflow-search-py/actions/runs/26398479661) on commit `825ba42` was the green CI that unblocked the publish flow. The same 16-job matrix from §19.2 and §20.2 ran ruff, ruff format check, mypy strict, pytest, and `python -m build`:
+
+| Package | Python versions | Result |
+|---|---|---|
+| `iflow-search` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-mcp` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-langchain` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-openapi` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+
+All 16 jobs green. The Node-20 deprecation warning noted in §20.2 still surfaces; unrelated to this release and still pending a workflow touch.
+
+### 21.3 Cold-install matrix
+
+Same shape as §19.3 / §20.3. A fresh Python 3.11 venv was created in `/tmp/iflow-openapi-a2-*` for each source, the package was installed, and the verification battery was re-run.
+
+| Source | Index URL | Notes | Result |
+|---|---|---|---|
+| Local wheel | `dist/iflow_search_openapi-0.1.0a2-py3-none-any.whl` | direct file path, no index | ✅ |
+| TestPyPI | `--index-url https://test.pypi.org/simple/` + `--extra-index-url https://pypi.org/simple/` | required `--index-strategy unsafe-best-match` for the same reason recorded in §20.3 — uv's default `first-index` strategy refuses the cross-index resolve when the package exists at older versions on PyPI | ✅ |
+| PyPI | default index | initial install attempt immediately post-upload failed with "No solution found" because the PyPI simple-index propagation hadn't caught up (the human URL and JSON API were both already serving the new release); retried with `uv pip install --refresh` and resolved cleanly. Same lag pattern as §20.3 | ✅ |
+
+Each cold venv asserted, in order:
+
+- `iflow_search_openapi.__version__` → `0.1.0a2`
+- Package path resolves under the cold venv's `site-packages/`, not the repo source tree
+- Console script `iflow-search-openapi` is installed in `<venv>/bin/`
+- No-key startup: exit 1, **stdout empty (0 bytes)**, stderr contains exactly `[iflow-search-openapi] configuration error: IFLOW_API_KEY is required and must be a non-empty string` and nothing else
+- `GET /health` (no auth) → `200 {"ok": true, "version": "0.1.0a2"}`
+
+Resolved dep tree was unchanged from `0.1.0a1`: `iflow-search-openapi==0.1.0a2`, `iflow-search==0.1.0a0`, `fastapi==0.136.3`, `uvicorn==0.48.0`, `pydantic==2.14.0a1`, plus transitive `httpx` / `starlette` / `idna` / `typing-extensions` / `typing-inspection` / `pydantic-core==2.47.0`. The new Pydantic `BaseModel` declarations in `_schemas.py` resolved against `pydantic==2.14.0a1` without any pin tightening — forward-compat held.
+
+### 21.4 The response-schema regression test
+
+`tests/test_openapi_schema.py` gained four new assertions on the canonical `/openapi.json` 200 shapes. Combined they assert that:
+
+```python
+schema = (await test_client.get("/openapi.json")).json()
+for path, op_id, required in [
+    ("/tools/iflow_web_search",   "iflow_web_search",   {"query", "results", "took_ms"}),
+    ("/tools/iflow_image_search", "iflow_image_search", {"query", "images",  "took_ms"}),
+    ("/tools/iflow_web_fetch",    "iflow_web_fetch",    {"url",   "content", "took_ms"}),
+]:
+    op = schema["paths"][path]["post"]
+    assert op["operationId"] == op_id
+    ok_200 = op["responses"]["200"]["content"]["application/json"]["schema"]
+    # Resolves through the $ref to the WebSearchSuccess / ImageSearchSuccess / WebFetchSuccess
+    # envelope, then to its `data` field. Both ok and data must be required; data must be a typed object.
+    assert ok_200 != {}
+    # `ok` is pinned to literal True; `data` is a fully-typed object with the expected required keys.
+```
+
+Before commit `0a00470` the 200-response branch of each tool route was the literal `{}` — FastAPI's default when the handler is annotated as returning `JSONResponse` (rather than a Pydantic model) and no `response_model=` is declared. Coze's importer iterates `responses["200"]["content"]["application/json"]["schema"]["properties"]` to type the tool's return; an empty schema produces zero properties and the importer rejects the action at import time. The fix is the route decoration — handler bodies are unchanged.
+
+The regression test set was confirmed to **fail** against a transient revert of `0a00470` before being accepted; passes on `825ba42` and was verified live against the PyPI-installed schema in §21.3.
+
+operationIds verified against the PyPI-installed schema (carrying forward §20.4):
+
+- `iflow_web_search`
+- `iflow_image_search`
+- `iflow_web_fetch`
+
+All three 200 response schemas are non-empty object envelopes with `ok` and `data` both required; `ok` is the literal `true`; `data` is a typed object with the per-tool required keys above.
+
+### 21.5 Real-API smoke — what was verified end-to-end
+
+Real-API smoke ran against the **PyPI-installed** server with the real `IFLOW_API_KEY` from the developer's shell environment (never printed). Smoke happened in two passes: the initial `scripts/smoke_real_api.py` run, then a targeted re-smoke of `iflow_image_search` against three stable queries.
+
+Initial pass (`scripts/smoke_real_api.py`, `IFLOW_OPENAPI_SMOKE=1`, run against the PyPI cold venv):
+
+| Tool | Request | Result |
+|---|---|---|
+| `iflow_web_search` | `{"query": "hello", "count": 2}` | `ok: true`, 2 results, `took_ms ≈ 1.7 s`, first result Adele "Hello" on YouTube |
+| `iflow_image_search` | script's hardcoded query | `ok: false`, upstream returned `business_code: "60404"` (`未找到相关图片`) — surfaced as `IFlowBusinessError` with `code: business_unknown` |
+| `iflow_web_fetch` | `{"url": "https://example.com"}` | `ok: true`, `title: "Example Domain"`, `content` non-empty, `from_cache: true` |
+
+The `iflow_image_search` failure was an **upstream API outcome** (the iFlow search engine returned no images for the script's specific query), not a regression — the request reached upstream, the auth chain through the bearer + CORS gate succeeded, and the error envelope shape is correct (`{ok: false, error: {code, message, type, business_code, response_body_truncated}}`). The route-level `business_no_results` synthesis described in §13.1 would have applied for `code == "business_no_results"`, but the core SDK mapped `business_code 60404` to `business_unknown` for this particular response shape, so no synthesis kicked in. Separately tracked; not 0.1.0a2-scope.
+
+To rule out a packaging issue, `iflow_image_search` was re-exercised against the PyPI-installed server using three stable queries with known image corpora:
+
+| Query | Result |
+|---|---|
+| `great wall of china` | `ok: true`, 3 images, `took_ms ≈ 3.3 s`, first item from Wikipedia |
+| `panda` | `ok: true`, 3 images, `took_ms ≈ 1.5 s`, first item from Wikipedia Giant Panda article |
+| `singapore skyline` | `ok: true`, 3 images, `took_ms ≈ 1.5 s` |
+
+3/3 returned well-formed envelopes (`{ok: true, data: {query, images: [...], took_ms}}`); every image item carried `image_url`, `source_url`, and `title`. The end-to-end image-search path through the PyPI wheel is confirmed working.
+
+Auth gate (server with `IFLOW_OPENAPI_AUTH_TOKEN` set):
+
+- `/health` no-token → 200 ✓ (bypass per §7.3)
+- `/tools/iflow_web_search` no Authorization header → 401 `{"code":"unauthorized","message":"Missing Authorization header..."}` ✓
+- `/tools/iflow_web_search` wrong bearer → 401 `{"code":"unauthorized","message":"Invalid bearer token."}` ✓
+- `/tools/iflow_web_search` correct bearer → 200 with real upstream results ✓
+
+CORS (server with `IFLOW_OPENAPI_CORS_ORIGIN=https://pypi-test.example`):
+
+- `OPTIONS /tools/iflow_web_search` from `https://pypi-test.example` → 200 + `Access-Control-Allow-Origin: https://pypi-test.example` ✓
+- `OPTIONS /tools/iflow_web_search` from `https://evil.example` → 400, no `Access-Control-Allow-Origin` echo ✓
+- `POST /tools/iflow_web_search` from `https://pypi-test.example` → 200 + `Access-Control-Allow-Origin` echo ✓
+
+Combined: web_search, image_search (re-smoke), web_fetch all confirmed against the PyPI-installed wheel through the bearer + CORS gate.
+
+### 21.6 No-leakage verification
+
+The PyPI-installed server was started with the real upstream `IFLOW_API_KEY` and a synthetic external bearer (`pypi-gate-probe-token-xyz`). All captured probe outputs — smoke log, four auth probe bodies, three CORS probe response dumps, server stdout/stderr — were scanned for:
+
+- the literal prefix `sk-` followed by 8+ alphanumerics (excluding the redacted `sk-e***16` form)
+- the literal prefix `pypi-AgE` (PyPI/TestPyPI token marker)
+- the literal string `IFLOW_API_KEY=`
+- the synthetic bearer literal `pypi-gate-probe-token-xyz`
+
+All four patterns: **0 hits**.
+
+Stdout from the PyPI-installed server was empty (0 bytes — confirmed by `tests/test_stdout_purity.py` and re-confirmed live). The no-key startup probe emitted the configuration-error diagnostic and nothing else; no path or key fragment leaked into the error message. The smoke script's `_scrub` helper redacted the upstream API key to the `sk-e***16` form in every log line, matching the redaction contract in §16.
+
+This complements the offline `tests/test_no_key_leakage.py` invariants, which ran green in CI on `825ba42` for every Python version.
+
+### 21.7 Coze compatibility
+
+Coze's plugin importer requires a typed 200 response schema to register an action. On `0.1.0a0` and `0.1.0a1` the canonical `/openapi.json` emitted `{}` for the 200 branch (FastAPI's default for `JSONResponse`-returning handlers without a declared model), so Coze import failed and any imported action that bypassed the type check stripped the response payload at dispatch time. The platform-smoke report on 2026-05-25 documented this with both the import-time error and a runtime payload-stripping reproduction.
+
+The prior workaround was a static OpenAPI overlay — `scripts/overlay_coze.py` — that injected the typed 200 schemas into the document after FastAPI generated it. The overlay served as a bridge for users who needed to import to Coze before this release.
+
+With `0.1.0a2` the canonical `/openapi.json` now emits the typed 200 schemas directly (asserted in §21.4); the overlay is no longer required for Coze import. The §21.3 PyPI cold-install matrix above did not exercise a live Coze import; that was deferred to the Coze platform team's regular import test cycle and the canonical-schema assertions in §21.4 are the contract surface.
+
+The Open WebUI compatibility verified at §20.5 carries forward unchanged — Open WebUI ingested the `0.1.0a1` schema correctly and the schema additions in `0.1.0a2` are strict supersets (Open WebUI did not depend on the 200 schema being empty).
+
+### 21.8 Tag
+
+A namespaced annotated tag was created and pushed for this release per the convention from [[release-tag-convention]]:
+
+```
+iflow-search-openapi/v0.1.0a2  →  commit 825ba42
+```
+
+Tag message: `iflow-search-openapi 0.1.0a2 — response schema compatibility prerelease`. Confirmed on the remote via `git push origin iflow-search-openapi/v0.1.0a2 → [new tag]` and `git ls-remote --tags origin` (both the annotated tag object and the `^{}` commit dereference resolve as expected). The release tag set for `iflow-search-openapi` is now:
+
+```
+iflow-search-openapi/v0.1.0a0
+iflow-search-openapi/v0.1.0a1
+iflow-search-openapi/v0.1.0a2
+```
+
+All three tags point at `chore(openapi): bump version to ...` commits whose artifacts are live on PyPI.
+
+### 21.9 Constraints honoured throughout
+
+- No real API key was ever written to the repository, committed to git, or printed to stdout. Smoke output used the redacted `sk-e***16` form from `scripts/smoke_real_api.py`; the per-call probes against the PyPI server suppressed the key entirely from any output path.
+- No `.env` file or other on-disk credential store was introduced. `IFLOW_API_KEY` was sourced from the developer's shell environment only.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts that passed local cold install and TestPyPI cold install. Sha256s match at every hop and against the PyPI JSON-API digest field.
+- No CI workflow was modified to publish. Every upload to TestPyPI and PyPI was a manual, audited `twine upload --non-interactive`.
+- `~/.pypirc` was never read by tooling other than `twine`. The release flow performed no `cat` / `head` / `less` / `grep` against it.
+- `DEEPSEEK_API_KEY` was not read at any point in the release flow.
+- Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
+- The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag creation and tag push were paused on the same gate. The image-search re-smoke was also gated on explicit "go" before being run against the live API.

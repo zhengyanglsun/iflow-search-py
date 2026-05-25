@@ -19,7 +19,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0a0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0a0`
-- ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a0`
+- ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a2`
 
 ## Installation
 
