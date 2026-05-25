@@ -57,6 +57,14 @@ The server reads its configuration from environment variables only — no
 }
 ```
 
+Claude Code 2.1.148 has been verified to discover and connect to the
+`0.1.0a0` artifact via `claude mcp list` / `claude mcp get` (stdio
+`initialize` + capability exchange). The wire protocol used by `tools/call`
+is exercised separately by the offline `scripts/smoke_stdio.py` and by a
+reference-client smoke against the live iFlow API; see
+[`docs/design/python-mcp-design.md` §15](https://github.com/zhengyanglsun/iflow-search-py/blob/main/docs/design/python-mcp-design.md#15-claude-code-direct-host-verification--010a0-2026-05-25)
+for the full record.
+
 ## Behavior
 
 - **Transport:** stdio only. `stdout` is reserved for the JSON-RPC stream;

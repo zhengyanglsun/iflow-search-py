@@ -462,3 +462,46 @@ The repository already had an unnamespaced `v0.1.0a0` tag claimed by the core SD
 - No `.env` file or other on-disk credential store was introduced.
 - The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts; no post-build modification.
 - No CI workflow was modified to publish — every upload to TestPyPI/PyPI was a manual, audited `twine upload`.
+
+## 15. Claude Code direct host verification — `0.1.0a0` (2026-05-25)
+
+Follow-up host-compatibility check confirming the already-published `iflow-search-mcp==0.1.0a0` artifact is discoverable and connectable from Claude Code (Anthropic's CLI). Hermes was the third-party MCP host used at release time (§14.3); this section adds a first-party check against the official Claude Code MCP host implementation.
+
+No code, version, package metadata, or tag changed for this verification. The smoke ran entirely against the PyPI artifact installed into a throwaway venv.
+
+### 15.1 Environment
+
+- Claude Code CLI: `2.1.148-20260509.2` (Node 22.22.2).
+- Cold venv: `/tmp/iflow-claude-code-smoke/venv` (Python 3.11), populated with `uv pip install --prerelease=allow iflow-search-mcp==0.1.0a0`. `iflow_search_mcp.__file__` resolved under that venv's `site-packages/`.
+- Isolated host state, all paths under `/tmp/`: `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and a temp project dir holding a transient `.mcp.json`. Every `claude` invocation used `env -i` so no inherited variable could leak in.
+- The real `~/.claude`, `~/.claude.json`, and `~/.config/claude*` were neither read nor written. Confirmed afterward by enumerating `mcpServers` across `~/.claude.json` — only the pre-existing `aone-km` entries were present; no `iflow-search` entry was added anywhere in real user config.
+
+### 15.2 What was verified
+
+Two independent transports of the same MCP handshake against the same installed artifact:
+
+**(a) Python `mcp` SDK reference client** — `ClientSession` over `stdio_client` spawned `python -m iflow_search_mcp._bin` directly.
+
+- `initialize` → `serverInfo = {name: "iflow-search-mcp", version: "0.1.0a0"}`.
+- `tools/list` → `["iflow_web_search", "iflow_image_search", "iflow_web_fetch"]` (exact order; schemas: `query` required for the two search tools with optional `count`, `url` required for `iflow_web_fetch`).
+- `tools/call` x3 against the live iFlow API: `iflow_web_search "great wall of china"` returned a Wikipedia top hit, `iflow_image_search "panda"` returned two image URLs, `iflow_web_fetch https://example.com` returned the example.com markdown — all `isError: false`, single `TextContent` block each, no stdout pollution.
+
+**(b) Claude Code's own MCP discovery** — `claude mcp list` and `claude mcp get iflow-search` from the isolated project dir containing `.mcp.json`. Claude Code documents these subcommands as performing stdio health checks (spawn the server, run the MCP handshake, exit).
+
+- `claude mcp list` → `iflow-search: /tmp/iflow-claude-code-smoke/venv/bin/iflow-search-mcp  - ✓ Connected`.
+- `claude mcp get iflow-search` → `Scope: Project config (shared via .mcp.json) · Status: ✓ Connected · Type: stdio`.
+- Claude Code's own MCP log (`~/Library/Caches/claude-cli-nodejs/.../mcp-logs-iflow-search/*.jsonl`, written under the *temp* `HOME`) recorded `Successfully connected (transport: stdio) in ~375ms` and `capabilities: {"hasTools":true, ..., "serverVersion":{"name":"iflow-search-mcp","version":"0.1.0a0"}}`.
+
+### 15.3 What was deliberately not run
+
+Claude Code was **not** launched in prompt mode (`-p`), interactive mode, or any code path that calls the Anthropic API. No LLM session ran, no agent loop executed, and no Claude Code OAuth/keychain credentials were touched — the `--bare`/auth gating would have blocked that anyway because the test ran under a synthetic `HOME` with no Anthropic credentials.
+
+This means the Claude-Code-side evidence is **discovery and stdio handshake**, not `tools/call` driven by an LLM. The `tools/call` evidence is from transport (a) (the Python `mcp` SDK reference client), which exercises the same JSON-RPC wire protocol Claude Code would use once an LLM decides to invoke a tool.
+
+### 15.4 Constraints honoured
+
+- `IFLOW_API_KEY` was read once from the parent shell env by a Python helper that wrote it into the transient `.mcp.json`; never inlined in tool-call arguments, never echoed, redacted out of every captured log shown to the operator. The three on-disk copies (`mcp.json`, `.mcp.json`, the `mcp get` stdout that echoed the env) lived only under `/tmp/iflow-claude-code-smoke*/` and were removed by `rm -rf` at the end.
+- `DEEPSEEK_API_KEY` was not used.
+- No `.env` file was created.
+- Real Claude Code config (`~/.claude/`, `~/.claude.json`, `~/.config/claude*`, `~/Library/Caches/claude-cli-nodejs/`) was not modified by the test; all host-side state landed under the temp `HOME`.
+- No source-code change, no version bump, no PyPI re-upload, no git tag, no commit, no push performed for this verification.
