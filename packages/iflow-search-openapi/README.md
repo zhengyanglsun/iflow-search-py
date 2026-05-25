@@ -142,7 +142,7 @@ IFLOW_OPENAPI_PORT="$PORT" IFLOW_OPENAPI_HOST=0.0.0.0 iflow-search-openapi
 
 Anything with a path, query, fragment, or non-printable character is rejected at startup with `ConfigError` and exit code 1 — header-injection guard.
 
-Preflight (`OPTIONS`) short-circuits to 204 before the bearer check, so browser-side tool importers (Open WebUI) can complete preflight without a token.
+Preflight (`OPTIONS`) short-circuits before the bearer check and returns HTTP 200 with the correct `Access-Control-Allow-*` headers, so browser-side tool importers (Open WebUI) can complete preflight without a token.
 
 `Access-Control-Allow-Headers` is `Content-Type, Authorization, X-Session-Id`. `X-Session-Id` is allowed for Open WebUI compatibility; the adapter does not read it.
 

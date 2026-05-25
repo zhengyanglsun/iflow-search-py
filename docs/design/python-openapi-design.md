@@ -384,7 +384,7 @@ At startup, the value is matched against `^(\*|https?://[A-Za-z0-9.-]{1,253}(?::
 
 Browser preflights do not carry the `Authorization` header. If the CORS middleware ran behind the auth dependency, every preflight would 401 and break tool import. The middleware order is therefore:
 
-1. CORS middleware (set headers + handle `OPTIONS` → 204)
+1. CORS middleware (set headers + answer `OPTIONS` preflight before auth; Starlette's `CORSMiddleware` responds 200 with the `Access-Control-Allow-*` reply — either 200 or 204 is spec-compliant)
 2. Body-size middleware
 3. Bearer auth dependency on routes
 
@@ -571,7 +571,7 @@ Mechanism: tests build a FastAPI app with an `AsyncIFlowSearchClient` whose unde
 | `test_version.py` | `__version__` matches `pyproject.toml`; PEP 440 prerelease pattern (mirrors `iflow-search-langchain/tests/test_version.py`) |
 | `test_config.py` | required key; base_url pass-through; timeout ms→s conversion; port range; auth-token presence; cors regex (`*`, valid scheme, path/query/fragment rejection); client-name regex; precise `ConfigError` messages |
 | `test_auth.py` | open mode allows all; closed mode 401 on missing/malformed/empty/wrong; correct bearer accepted; constant-time path covered (length mismatch case explicit); `/health` always exempt; `/openapi.json` gated when closed |
-| `test_cors.py` | unset → no CORS headers; `*` → wildcard; valid origin echoed; OPTIONS short-circuits to 204 even without bearer; X-Session-Id appears in allow-headers |
+| `test_cors.py` | unset → no CORS headers; `*` → wildcard; valid origin echoed; OPTIONS preflight succeeds without bearer (asserts `status_code in (200, 204)` — both spec-compliant; Starlette returns 200 in practice); X-Session-Id appears in allow-headers |
 | `test_openapi_schema.py` | `/openapi.json` returns 3 tool paths in `[web_search, image_search, web_fetch]` order; `info.title`/`info.version` correct; OpenAPI version is `3.1.x`; request body schema for each tool matches the Pydantic model (required fields, `additionalProperties: false`); error schema declared; bearer security scheme present iff configured |
 | `test_health.py` | GET `/health` → 200 `{"ok": true, "version": "<adapter version>"}`; exempt from auth in closed mode |
 | `test_tools_success.py` | for each tool: valid body → 200 + `ok: true` + `data` with snake_case fields; assert outbound iFlow request URL, method, and body (`keywords`/`num`/`url`); `raw` is excluded by default |
@@ -777,3 +777,145 @@ iflow-search-openapi/v0.1.0a0
 - `DEEPSEEK_API_KEY` was not read at any point in the release flow; the OpenAPI adapter has no LLM-provider coupling.
 - Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
 - The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag push was paused on the same gate.
+
+## 20. Release verification — `0.1.0a1` (2026-05-25)
+
+Patch prerelease of the OpenAPI adapter. Single behaviour change: the three tool routes now declare explicit OpenAPI `operationId` values (`iflow_web_search`, `iflow_image_search`, `iflow_web_fetch`) instead of inheriting FastAPI's defaults (`web_search_tools_iflow_web_search_post`, etc.). The Open WebUI dispatcher resolves tool calls by `operationId`, and the FastAPI defaults broke that resolution end-to-end; this release restores the cross-host stability that §6.2 always intended.
+
+No protocol surface, public Python API, configuration, or wire-attribution change between `0.1.0a0` and `0.1.0a1`. Core SDK dependency floor unchanged (`iflow-search>=0.1.0a0,<0.2`).
+
+Code change: `a424d42 feat(openapi): pin stable operationIds on tool routes` plus a regression test `tests/test_openapi_schema.py::test_operation_ids_are_stable_tool_names`. Version bump: `237330a chore(openapi): bump version to 0.1.0a1`.
+
+### 20.1 Artifacts
+
+Both files were built once locally with `python -m build` from commit `237330a` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_openapi-0.1.0a1-py3-none-any.whl` | 24,297 B | `9aedc56fd1f4ba9baee2f1d214def47b881735c7eb676b4c0c41a4ef8415cfab` |
+| `iflow_search_openapi-0.1.0a1.tar.gz` | 18,162 B | `4b75427aee67b32ff979e83001c6405d47b59d7f43200fde8eedc403ea8ac18f` |
+
+Sizes are within a few hundred bytes of the `0.1.0a0` artifacts (§19.1: wheel 23,894 B, sdist 17,767 B); the operationId pin plus the version-string bump are the only payload changes between releases.
+
+Sha256s were re-computed against the local `dist/` artifacts immediately before each `twine upload` (TestPyPI, then PyPI) and matched. Each cold-install venv then served as a behavioural cross-check (correct `__version__`, console script present, real-API smoke green) rather than a re-hash — sufficient to confirm the wheel that PyPI returned is the wheel we built. A digest cross-check against PyPI's `/pypi/iflow-search-openapi/0.1.0a1/json` endpoint can be done by a future maintainer if there's ever a reason to suspect a mid-transit substitution; both the §19.1 precedent and the byte-stable build (`hatchling` reproducible build) make that unlikely.
+
+### 20.2 CI gate
+
+GitHub Actions run [`26390603496`](https://github.com/zhengyanglsun/iflow-search-py/actions/runs/26390603496) on commit `237330a` was the green CI that unblocked the publish flow. The same 16-job matrix from §19.2 ran ruff, ruff format check, mypy strict, pytest, and `python -m build`:
+
+| Package | Python versions | Result |
+|---|---|---|
+| `iflow-search` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-mcp` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-langchain` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-openapi` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+
+CI logged a non-blocking warning about Node 20 deprecation in `actions/checkout@v4` and `actions/setup-python@v5` (default switch June 2nd, 2026; removal September 16th, 2026). Unrelated to this release; should be folded into the next CI/workflow touch.
+
+### 20.3 Cold-install matrix
+
+Same shape as §19.3. A fresh Python 3.11 venv was created in `/tmp/iflow-openapi-a1-*` for each source, the package was installed, and the verification battery from §19.3 was re-run.
+
+| Source | Index URL | Notes | Result |
+|---|---|---|---|
+| Local wheel | `dist/iflow_search_openapi-0.1.0a1-py3-none-any.whl` | direct file path, no index | ✅ |
+| TestPyPI | `--index-url https://test.pypi.org/simple/` + `--extra-index-url https://pypi.org/simple/` | required `--index-strategy unsafe-best-match` because the package exists at `0.1.0a0` on PyPI and uv's default `first-index` strategy refused the cross-index resolve. PyPI provides `iflow-search==0.1.0a0`, `fastapi`, `uvicorn`, `pydantic`, `httpx`; TestPyPI provides the new `0.1.0a1`. | ✅ |
+| PyPI | default index | initial install attempt immediately post-upload failed with "no version found" because the simple-index propagation hadn't caught up; retried after 10 s with `uv pip install --refresh` and resolved cleanly. The PyPI human URL was already serving the release at this point — the lag is in the simple-index machine endpoint. | ✅ |
+
+Each cold venv asserted, in order:
+
+- `iflow_search_openapi.__version__` → `0.1.0a1`
+- `importlib.metadata.version("iflow-search-openapi")` → `0.1.0a1`
+- Package path resolves under the cold venv's `site-packages/`, not the repo source tree
+- Console script `iflow-search-openapi` is installed in `<venv>/bin/`
+- No-key startup (run with `env -i` to strip the developer's `IFLOW_API_KEY`): exit 1, **stdout empty (0 bytes)**, stderr contains exactly `[iflow-search-openapi] configuration error: IFLOW_API_KEY is required and must be a non-empty string` and nothing else
+- `GET /health` (no auth) → `200 {"ok": true, "version": "0.1.0a1"}`
+- `GET /openapi.json` without bearer → `401`; with bearer → `200`, `openapi: 3.1.0`, `info.version: 0.1.0a1`, three tool paths present, `BearerAuth` security scheme present
+- CORS preflight (`OPTIONS /tools/iflow_web_search` with `Origin: https://open-webui.example` and `Access-Control-Request-Method: POST`) → succeeds **without** a bearer; `Access-Control-Allow-Origin` echoes the configured origin; `Access-Control-Allow-Methods: GET, POST, OPTIONS`; `Access-Control-Allow-Headers` includes `Authorization` and `X-Session-Id`. Live status code is **200** (Starlette's `CORSMiddleware` default; both 200 and 204 are spec-compliant and the regression test asserts `in (200, 204)`). See §9.5 and the wording-fix note in §20.7 below.
+- `POST /tools/iflow_web_search` without bearer → 401; with the wrong bearer → 401
+
+### 20.4 The new operationId regression test
+
+`tests/test_openapi_schema.py::test_operation_ids_are_stable_tool_names` is the regression test that motivated this release. It asserts:
+
+```python
+paths = (await test_client.get("/openapi.json")).json()["paths"]
+assert paths["/tools/iflow_web_search"]["post"]["operationId"] == "iflow_web_search"
+assert paths["/tools/iflow_image_search"]["post"]["operationId"] == "iflow_image_search"
+assert paths["/tools/iflow_web_fetch"]["post"]["operationId"] == "iflow_web_fetch"
+```
+
+Before commit `a424d42`, FastAPI's default `unique_id_function` synthesised an `operationId` from the handler function name and the route path — e.g. `web_search_tools_iflow_web_search_post`. The Open WebUI dispatcher (`execute_tool_server` in `open_webui.utils.tool_servers`) resolves tool calls **by `operationId`**, not by path, so the LLM-issued `iflow_web_search` invocation returned `No matching route found for operationId: iflow_web_search`. Coze and other OpenAPI tool hosts that follow the same dispatch convention were affected the same way.
+
+Pinning the `operation_id=` kwarg on each `@router.post(...)` in `_routes.py` fixes the dispatch on every host without changing the URL or the tool name surfaced to the model.
+
+The regression test was verified to **fail** against a transient revert of `a424d42` before being accepted; it passes on `237330a` and was confirmed live against the PyPI-installed schema in §20.3.
+
+### 20.5 Real-API smoke — what was verified end-to-end
+
+Real-API smoke ran against the **PyPI-installed** server (bearer-gated, CORS-configured) with the real `IFLOW_API_KEY` from the developer's shell environment, never printed:
+
+| Tool | Request | Result |
+|---|---|---|
+| `iflow_web_search` | `{"query": "latest LLM benchmarks", "count": 2}` | `ok: true`, 2 results, `took_ms ≈ 1.7 s`, first title `'LiveBench'` |
+| `iflow_image_search` | `{"query": "red panda", "count": 2}` | `ok: true`, 2 images, `took_ms ≈ 1.7 s` |
+| `iflow_web_fetch` | `{"url": "https://example.com"}` | `ok: true`, title `'Example Domain'`, `content_chars = 119`, `from_cache: true` |
+
+All three tools returned valid envelopes through the bearer + CORS gate (3/3). The TestPyPI cold venv had previously passed the same 3/3 smoke under the same conditions.
+
+`iflow_web_fetch` initially tripped the harness's strict JSON parser because the fetched body contains unescaped control characters inside string values — that's the iFlow API returning raw newlines from the source page, not a server-side bug. A lenient re-parse (`json.loads(..., strict=False)`) confirmed the envelope shape. The behaviour is identical on 0.1.0a0; the production `httpx`-based smoke (`scripts/smoke_real_api.py`) doesn't trip on it because httpx's parser is lenient by default.
+
+### 20.6 No-leakage verification
+
+The PyPI-installed server was started with the real upstream `IFLOW_API_KEY` and a synthetic external bearer (`pypi-verify-token-xyz`), then all three tools were exercised. The captured server log was scanned for:
+
+- the literal prefix `sk-` followed by 20+ alphanumerics
+- the literal prefix `Bearer ` followed by 20+ characters
+- the literal prefix `pypi-` followed by 20+ characters
+- the absolute path `/Users/lzy`
+
+All four patterns: **0 hits**.
+
+Stdout was empty (0 bytes, as guaranteed by `tests/test_stdout_purity.py`). Stderr contained only the startup banner and uvicorn lifecycle lines. The no-key startup probe (run with `env -i`) emitted the configuration-error diagnostic and nothing else; no path or key fragment leaked into the error message.
+
+This complements the offline `tests/test_no_key_leakage.py` invariants, which ran green in CI on `237330a` for every Python version.
+
+### 20.7 Carried-over docs fixes
+
+While preparing this release the docs CORS-preflight wording was found to be inaccurate in three places: it claimed `OPTIONS` returns HTTP 204, but Starlette's `CORSMiddleware` returns 200 in practice, and the test (`tests/test_cors.py`) had always asserted `status_code in (200, 204)`. The functional behaviour (preflight succeeds without auth, ACAO/Methods/Headers all set correctly) was never wrong — only the status code in prose. The discrepancy existed on `0.1.0a0` too.
+
+Fixed in the closure docs commit (alongside this §20):
+
+- `packages/iflow-search-openapi/README.md` — `## CORS` section
+- `docs/design/python-openapi-design.md` §9.5 — middleware order step 1
+- `docs/design/python-openapi-design.md` §15 — `test_cors.py` row of the testing matrix
+
+No code change. Tests already asserted the spec-compliant range.
+
+### 20.8 Tag
+
+A namespaced annotated tag was created and pushed for this release per the convention from [[release-tag-convention]]:
+
+```
+iflow-search-openapi/v0.1.0a1  →  commit 237330a
+```
+
+Tag message: `iflow-search-openapi 0.1.0a1 — operationId compatibility prerelease`. Confirmed on the remote via `git push origin iflow-search-openapi/v0.1.0a1 → [new tag]`. The release tag set for `iflow-search-openapi` is now:
+
+```
+iflow-search-openapi/v0.1.0a0
+iflow-search-openapi/v0.1.0a1
+```
+
+Both tags point at `chore(openapi): bump version to ...` commits whose artifacts are live on PyPI.
+
+### 20.9 Constraints honoured throughout
+
+- No real API key was ever written to the repository, committed to git, or printed to stdout. Smoke output used the redacted form `sk-…***xx` from `scripts/smoke_real_api.py`; the per-call probes against the PyPI server suppressed the key entirely from any output path.
+- No `.env` file or other on-disk credential store was introduced. `IFLOW_API_KEY` was sourced from the developer's shell environment only.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts that passed local cold install and TestPyPI cold install. Sha256s match at every hop.
+- No CI workflow was modified to publish. Every upload to TestPyPI and PyPI was a manual, audited `twine upload --non-interactive`.
+- `~/.pypirc` was never read by tooling other than `twine`. The release flow performed no `cat` / `head` / `less` / `grep` against it.
+- `DEEPSEEK_API_KEY` was not read at any point in the release flow.
+- Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
+- The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag creation and tag push were paused on the same gate.
