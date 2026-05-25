@@ -40,6 +40,8 @@ By default the server binds **`127.0.0.1:8787`** — local-only. Set `IFLOW_OPEN
 | `POST` | `/tools/iflow_image_search` | `{"query": "...", "count": 3}` |
 | `POST` | `/tools/iflow_web_fetch` | `{"url": "https://example.com"}` |
 
+Each tool route declares an explicit OpenAPI `operationId` matching its path-level name (`iflow_web_search`, `iflow_image_search`, `iflow_web_fetch`). Tool hosts such as Open WebUI and Coze dispatch by `operationId` and surface it as the tool name to the consuming LLM — pinning them keeps the LLM-facing names stable across releases.
+
 ### Success envelope
 
 ```json
@@ -74,12 +76,16 @@ Field names are **snake_case**. The core SDK's `raw` (upstream envelope) is excl
 
 ## Use with Open WebUI
 
-1. Run `iflow-search-openapi` somewhere Open WebUI can reach (`http://your-host:8787`).
-2. In Open WebUI → **Workspace → Tools → Add Tool** (the "OpenAPI Servers" entry), paste `http://your-host:8787/openapi.json`.
-3. If you set `IFLOW_OPENAPI_AUTH_TOKEN`, Open WebUI will prompt for it when importing.
-4. Open WebUI imports the three tools; assign them to a model/conversation as usual.
+1. Run `iflow-search-openapi` somewhere Open WebUI can reach.
+   - Same host as Open WebUI: defaults are fine.
+   - Open WebUI in Docker, this server on the host: bind with `IFLOW_OPENAPI_HOST=0.0.0.0` and use `http://host.docker.internal:<port>` from inside the container.
+2. In Open WebUI → **Settings → Admin Settings → Tools → External Tool Servers → Add Connection**, paste the server URL (e.g. `http://host.docker.internal:8787`). The path defaults to `openapi.json`.
+3. If you set `IFLOW_OPENAPI_AUTH_TOKEN`, choose **Bearer** auth and paste the token. Otherwise leave auth as **None** — the server is open, exactly as configured.
+4. Open WebUI fetches `/openapi.json` and registers the three tools. They appear as `iflow_web_search`, `iflow_image_search`, `iflow_web_fetch` in the model's tool list (matching the explicit `operationId` values).
 
 If Open WebUI runs in a browser on a different origin from this server, set `IFLOW_OPENAPI_CORS_ORIGIN=https://your-open-webui-host`.
+
+The same registration can be driven over HTTP for headless setups — POST to `/api/v1/configs/tool_servers` on Open WebUI with a `TOOL_SERVER_CONNECTIONS` payload mirroring the UI fields above.
 
 ## Use with Coze
 

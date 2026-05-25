@@ -51,7 +51,14 @@ Each tool sets `response_format = "content_and_artifact"`. From `_run` / `_arun`
 - **`content`** — a short LLM-friendly text summary (titles, URLs, snippets).
 - **`artifact`** — the core SDK's normalized response as a JSON-serializable dict, including the raw envelope on `artifact["raw"]`.
 
-LangChain's `tool.invoke({...})` returns just the content string. To get the artifact, use a `ToolCall`-shaped input per the LangChain docs for your installed `langchain-core` version, or call the underlying client directly.
+LangChain's `tool.invoke({...})` returns just the content string. To get the artifact too, pass a `ToolCall`-shaped input — that's the path agent loops use internally and the path `ToolNode` dispatches through:
+
+```python
+msg = await tool.ainvoke(
+    {"name": tool.name, "args": {"query": "..."}, "id": "call-1", "type": "tool_call"}
+)
+# msg is a langchain_core.messages.ToolMessage with .content (str) and .artifact (dict)
+```
 
 ## LangGraph
 
@@ -69,6 +76,49 @@ agent = create_react_agent(
     tools=create_iflow_search_tools(api_key=os.environ["IFLOW_API_KEY"]),
 )
 ```
+
+### Driving `ToolNode` directly (LangGraph 1.x)
+
+If you bypass `create_react_agent` and invoke a bare `ToolNode` yourself — useful for tests or custom graphs — LangGraph 1.x requires a `Runtime` in the config. The agent loop sets this up for you; calling `ToolNode.ainvoke(...)` without it raises `ValueError: Missing required config key`. Working pattern:
+
+```python
+from langgraph._internal._constants import CONFIG_KEY_RUNTIME
+from langgraph.prebuilt import ToolNode
+from langgraph.runtime import Runtime
+
+node = ToolNode(create_iflow_search_tools())
+out = await node.ainvoke(
+    [{"name": "iflow_web_fetch", "args": {"url": "https://example.com"},
+      "id": "call-1", "type": "tool_call"}],
+    config={"configurable": {CONFIG_KEY_RUNTIME: Runtime()}},
+)
+```
+
+This is a LangGraph internal API and may move; pin your `langgraph` version if you depend on it.
+
+## Use with CrewAI
+
+CrewAI's `crewai.tools.BaseTool.from_langchain(...)` is **not** a working bridge in CrewAI 1.x — it instantiates the abstract `BaseTool` class itself and expects the older `Tool(func=...)` shape, not the modern `BaseTool`-with-`_run` shape this package emits. The working pattern is a one-line subclass per tool:
+
+```python
+import os
+from crewai.tools import BaseTool as CrewBaseTool
+from iflow_search_langchain import create_iflow_search_tools
+
+def adapt(lc_tool):
+    class _Adapted(CrewBaseTool):
+        name: str = lc_tool.name
+        description: str = lc_tool.description
+        args_schema: type = lc_tool.args_schema
+        def _run(self, **kwargs):
+            return lc_tool.invoke(kwargs)
+    return _Adapted()
+
+crew_tools = [adapt(t) for t in create_iflow_search_tools(api_key=os.environ["IFLOW_API_KEY"])]
+# Pass crew_tools to crewai.Agent(tools=...) as usual.
+```
+
+The adapted tools share the same underlying client(s), so attribution (`IFlow-Source: langchain`) is preserved.
 
 ## Configuration
 
