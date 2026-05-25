@@ -10,6 +10,14 @@ Three POST tool endpoints plus ``/health``. Each tool route:
 4. On success, serialises with ``model_dump(mode="json", by_alias=False,
    exclude={"raw"})`` and wraps in ``{"ok": true, "data": ...}``.
 
+Each tool route also declares ``response_model=...`` (the matching ``*Success``
+class in :mod:`._schemas`). Because handlers return :class:`fastapi.responses.JSONResponse`
+directly, Pydantic does NOT re-serialise the body — the runtime envelope is
+unchanged. The sole purpose is the OpenAPI schema: without ``response_model``,
+FastAPI emits ``"schema": {}`` for the 200 response, which Coze and other strict
+tool hosts reject at import time and which causes payload-stripping at runtime
+(see platform-smoke 2026-05-25).
+
 The async client is shared across all requests — one connection pool per
 process — and owned by ``_app.build_app``.
 
@@ -27,7 +35,14 @@ from iflow_search import AsyncIFlowSearchClient
 from iflow_search.errors import IFlowBusinessError, IFlowError
 
 from ._errors import iflow_error_to_envelope, status_for_iflow_error
-from ._schemas import ImageSearchBody, WebFetchBody, WebSearchBody
+from ._schemas import (
+    ImageSearchBody,
+    ImageSearchSuccess,
+    WebFetchBody,
+    WebFetchSuccess,
+    WebSearchBody,
+    WebSearchSuccess,
+)
 from ._version import __version__
 
 
@@ -80,6 +95,7 @@ def build_router(
         operation_id="iflow_web_search",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
+        response_model=WebSearchSuccess,
     )
     async def web_search(body: WebSearchBody, _request: Request) -> JSONResponse:
         try:
@@ -98,6 +114,7 @@ def build_router(
         operation_id="iflow_image_search",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
+        response_model=ImageSearchSuccess,
     )
     async def image_search(body: ImageSearchBody, _request: Request) -> JSONResponse:
         try:
@@ -116,6 +133,7 @@ def build_router(
         operation_id="iflow_web_fetch",
         tags=["tools"],
         dependencies=[Depends(auth_dependency)],
+        response_model=WebFetchSuccess,
     )
     async def web_fetch(body: WebFetchBody, _request: Request) -> JSONResponse:
         try:

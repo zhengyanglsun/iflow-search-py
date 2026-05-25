@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import httpx
 import pytest
@@ -114,3 +115,127 @@ async def test_security_scheme_absent_when_no_token(
     schema = (await test_client.get("/openapi.json")).json()
     assert "security" not in schema
     assert "BearerAuth" not in schema.get("components", {}).get("securitySchemes", {})
+
+
+# ---------------------------------------------------------------------------
+# 200 response-body schemas.
+#
+# Coze (and any other tool host that materialises responses against the
+# declared schema) drops fields the schema does not enumerate. When the routes
+# return a bare ``JSONResponse`` and declare no ``response_model``, FastAPI
+# emits an empty ``"schema": {}`` for the 200 response, which Coze rejects at
+# import time and which causes payload-stripping at runtime. These tests pin
+# the success-envelope shape so the canonical schema is importable everywhere.
+# See platform-smoke report 2026-05-25.
+# ---------------------------------------------------------------------------
+
+
+def _resolve_ref(schema: dict, ref: str) -> dict:
+    """Walk a ``"#/components/schemas/Name"`` ref to its component dict."""
+    assert ref.startswith("#/"), ref
+    node: Any = schema
+    for part in ref[2:].split("/"):
+        node = node[part]
+    return node
+
+
+def _resolve_response_schema(schema: dict, tool_path: str) -> dict:
+    raw = schema["paths"][tool_path]["post"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]
+    return _resolve_ref(schema, raw["$ref"]) if "$ref" in raw else raw
+
+
+def _resolve_property(schema: dict, parent: dict, prop_name: str) -> dict:
+    prop = parent["properties"][prop_name]
+    return _resolve_ref(schema, prop["$ref"]) if "$ref" in prop else prop
+
+
+@pytest.mark.asyncio
+async def test_tool_200_schemas_are_non_empty_envelopes(
+    client_factory: Callable[..., tuple],
+) -> None:
+    test_client, _core, _rec = client_factory(upstream_handler=_upstream_ok)
+    schema = (await test_client.get("/openapi.json")).json()
+    for tool in (
+        "/tools/iflow_web_search",
+        "/tools/iflow_image_search",
+        "/tools/iflow_web_fetch",
+    ):
+        envelope_schema = _resolve_response_schema(schema, tool)
+        assert envelope_schema.get("type") == "object", tool
+        # No bare empty schemas. Coze rejects these as
+        # "API response schema must be json object/array".
+        assert envelope_schema.get("properties"), tool
+        assert "ok" in envelope_schema["properties"], tool
+        assert "data" in envelope_schema["properties"], tool
+        # ``ok`` and ``data`` must both be required on the success envelope —
+        # the consuming LLM cannot tell a missing field from a falsy one.
+        assert set(envelope_schema.get("required", [])) >= {"ok", "data"}, tool
+
+
+@pytest.mark.asyncio
+async def test_web_search_200_data_shape(
+    client_factory: Callable[..., tuple],
+) -> None:
+    test_client, _core, _rec = client_factory(upstream_handler=_upstream_ok)
+    schema = (await test_client.get("/openapi.json")).json()
+    envelope_schema = _resolve_response_schema(schema, "/tools/iflow_web_search")
+    data = _resolve_property(schema, envelope_schema, "data")
+    assert data["type"] == "object"
+    assert set(data["properties"]) >= {"query", "results", "took_ms"}
+    assert set(data["required"]) >= {"query", "results", "took_ms"}
+    results_schema = data["properties"]["results"]
+    assert results_schema["type"] == "array"
+    item = (
+        _resolve_ref(schema, results_schema["items"]["$ref"])
+        if "$ref" in results_schema["items"]
+        else results_schema["items"]
+    )
+    assert item["type"] == "object"
+    assert set(item["properties"]) >= {"title", "url", "snippet", "position", "date"}
+
+
+@pytest.mark.asyncio
+async def test_image_search_200_data_shape(
+    client_factory: Callable[..., tuple],
+) -> None:
+    test_client, _core, _rec = client_factory(upstream_handler=_upstream_ok)
+    schema = (await test_client.get("/openapi.json")).json()
+    envelope_schema = _resolve_response_schema(schema, "/tools/iflow_image_search")
+    data = _resolve_property(schema, envelope_schema, "data")
+    assert data["type"] == "object"
+    assert set(data["properties"]) >= {"query", "images", "took_ms"}
+    assert set(data["required"]) >= {"query", "images", "took_ms"}
+    images_schema = data["properties"]["images"]
+    assert images_schema["type"] == "array"
+    item = (
+        _resolve_ref(schema, images_schema["items"]["$ref"])
+        if "$ref" in images_schema["items"]
+        else images_schema["items"]
+    )
+    assert item["type"] == "object"
+    assert set(item["properties"]) >= {
+        "image_url",
+        "source_url",
+        "title",
+        "width",
+        "height",
+        "position",
+    }
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_200_data_shape(
+    client_factory: Callable[..., tuple],
+) -> None:
+    test_client, _core, _rec = client_factory(upstream_handler=_upstream_ok)
+    schema = (await test_client.get("/openapi.json")).json()
+    envelope_schema = _resolve_response_schema(schema, "/tools/iflow_web_fetch")
+    data = _resolve_property(schema, envelope_schema, "data")
+    assert data["type"] == "object"
+    expected = {"url", "title", "content", "from_cache", "took_ms"}
+    assert set(data["properties"]) >= expected
+    # ``url``, ``content``, and ``took_ms`` are the load-bearing fields the LLM
+    # consumes; ``title`` and ``from_cache`` are informational.
+    assert set(data["required"]) >= {"url", "content", "took_ms"}
