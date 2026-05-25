@@ -669,3 +669,111 @@ Locked choices for v0.1.0a0. Each was raised as an open question during design a
 9. **CI extends the existing matrix workflow.** Add `iflow-search-openapi` as the fourth leg in `.github/workflows/ci.yml`'s matrix. No new workflow file. Fail-fast across packages preserved; single status report. Matches MCP and LangChain. See §17.1.
 
 10. **PyPI `Repository` URL points to the monorepo: `https://github.com/zhengyanglsun/iflow-search-py`.** Same as `iflow-search`, `iflow-search-mcp`, and `iflow-search-langchain`.
+
+## 19. Release verification — `0.1.0a0` (2026-05-25)
+
+Record of what was verified for the first published release of `iflow-search-openapi`. Kept here so future maintainers can see what the bar was and where the artifacts came from. Mirrors §16 of the LangChain design doc and §14 of the MCP design doc.
+
+### 19.1 Artifacts
+
+Both files were built once locally with `python -m build` from commit `2db2a6d` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_openapi-0.1.0a0-py3-none-any.whl` | 23,894 B | `4db210813c7e4f506ed9d94c5a22b220c663058304163260c9920bd4e7ed4d67` |
+| `iflow_search_openapi-0.1.0a0.tar.gz` | 17,767 B | `fc80ee3820ac3e31a39d2fde7638b9b1855cb2ebb23f81b62660595a00a8e197` |
+
+Hashes were compared against the `digests.sha256` field returned by the TestPyPI and PyPI JSON APIs (`/pypi/iflow-search-openapi/0.1.0a0/json`) at each hop. All four digests match.
+
+### 19.2 CI gate
+
+GitHub Actions run [`26380766483`](https://github.com/zhengyanglsun/iflow-search-py/actions/runs/26380766483) on commit `2db2a6d` was the green CI that unblocked the publish flow. It exercised the full package matrix, now extended to four legs per §17.1:
+
+| Package | Python versions | Result |
+|---|---|---|
+| `iflow-search` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-mcp` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-langchain` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-openapi` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+
+16/16 jobs ran ruff, mypy strict, pytest, and `python -m build`. No CI job uploads anywhere — publishing is manual `twine upload` only (§17.2).
+
+### 19.3 Cold-install matrix
+
+For each source, a fresh Python 3.11 venv was created in `/tmp/iflow-openapi-*`, the package was installed with `uv pip install --prerelease=allow iflow-search-openapi==0.1.0a0`, and both an **offline import / startup smoke** (no `IFLOW_API_KEY` set, plus a "good env" run with a synthetic key) and the **real-API smoke** (`scripts/smoke_real_api.py` with `IFLOW_OPENAPI_SMOKE=1`) were run.
+
+| Source | Index URL | Offline smoke | Real-API smoke |
+|---|---|---|---|
+| Local wheel | `file:///…/packages/iflow-search-openapi/dist/` | ✅ | ✅ (from source tree) |
+| TestPyPI | `https://test.pypi.org/simple/` + PyPI as `--extra-index-url` for deps | ✅ | ✅ (from cold venv) |
+| PyPI | default index | ✅ | ✅ (from cold venv) |
+
+The TestPyPI install uses PyPI as `--extra-index-url` because the runtime dependency `iflow-search==0.1.0a0` only exists on PyPI; TestPyPI cannot resolve it on its own. The same reasoning applies to `fastapi`, `uvicorn`, `pydantic`, and `httpx`.
+
+The PyPI install resolved the following dep tree end-to-end: `iflow-search-openapi==0.1.0a0`, `iflow-search==0.1.0a0`, `fastapi==0.136.3`, `uvicorn==0.48.0`, `pydantic==2.14.0a1`, plus transitive `httpx` / `starlette` / `idna`.
+
+Offline smoke asserted:
+
+- `import iflow_search_openapi; print(__version__)` → `0.1.0a0`
+- Package path resolves under the cold venv's `site-packages/`, not the repo source tree.
+- Console script `iflow-search-openapi` is installed in `<venv>/bin/`.
+- No-key startup: exit 1, **stdout empty**, stderr contains the `IFLOW_API_KEY` diagnostic and nothing else (§14, §15).
+- Good-env startup (synthetic key `test-key`): stderr banner matches the expected form `[iflow-search-openapi] v0.1.0a0 listening on http://127.0.0.1:<port> — bearer auth DISABLED (open mode)`; stdout still empty.
+- `GET /health` → `200 {"ok": true, "version": "0.1.0a0"}` with no auth.
+- `GET /openapi.json` returns `401` without bearer when `IFLOW_OPENAPI_AUTH_TOKEN` is set; with bearer, returns `openapi: 3.1.0`, the four expected paths (`/health`, `/tools/iflow_web_search`, `/tools/iflow_image_search`, `/tools/iflow_web_fetch`), and `security: [{BearerAuth: []}]` (§7.3, §7.4).
+- CORS preflight (`OPTIONS /tools/iflow_web_search` with the configured origin) returns `200` with `Access-Control-Allow-Origin` echoed and `Access-Control-Allow-Headers` including `X-Session-Id` (§9.5).
+
+### 19.4 Real-API smoke — what was verified end-to-end
+
+`scripts/smoke_real_api.py` exercised all three tools against the live iFlow API from each venv. The script reads `IFLOW_API_KEY` from the environment only, redacts the key in all log output (first 4 chars + `***` + last 2), writes no files, and refuses to run without `IFLOW_OPENAPI_SMOKE=1`. It spins up the FastAPI app on a free `127.0.0.1` port, exercises the four routes via `httpx.AsyncClient`, then shuts uvicorn down via `server.should_exit = True` (§16).
+
+What the smoke verified is the adapter contract:
+
+- `POST /tools/iflow_web_search` `{"query": "hello world", "count": 2}` → `200 {"ok": true, "data": {…}}` with 2 results and a populated `took_ms`.
+- `POST /tools/iflow_image_search` `{"query": "cat", "count": 2}` → `200 {"ok": true}` with 2 images.
+- `POST /tools/iflow_web_fetch` `{"url": "https://example.com"}` → `200 {"ok": true}` with non-empty `content` and a populated `took_ms`.
+
+All three passed from the source tree, the TestPyPI cold venv, and the PyPI cold venv (9 successful tool invocations total against the live API).
+
+### 19.5 Attribution headers on the wire
+
+The offline test suite (`tests/test_attribution.py`) already proves that the auto-built client emits `IFlow-Source: openapi`, `IFlow-Integration: iflow-search-openapi`, `IFlow-Integration-Version: 0.1.0a0`, no `IFlow-MCP-*` headers, and forwards the configured upstream bearer — all observed against an `httpx.MockTransport` recorder (§11). The live smoke would have failed with `IFlowAuthError` if attribution had broken the upstream request — it succeeded, confirming the headers reached iFlow end-to-end.
+
+### 19.6 No-leakage verification
+
+A dedicated probe ran the PyPI-installed server with the real `IFLOW_API_KEY` and exercised all three tools, then byte-for-byte scanned the captured stdout/stderr for the key:
+
+- stdout: 0 bytes (process correctly emits nothing on stdout — §15).
+- stderr: 455 bytes containing only the banner and uvicorn lifecycle lines (`Started server process`, `Application startup complete`, `Uvicorn running on http://127.0.0.1:<port>`, `Shutting down`, `Application shutdown complete`, `Finished server process`).
+- `IFLOW_API_KEY.encode() in captured_bytes` → `False` for both streams.
+- `b"sk-" in captured_bytes` → `False` for both streams.
+
+A separate fake-key run (synthetic upstream credential `sk-real-upstream-creds-DO-NOT-LEAK` + synthetic external bearer) confirmed the same envelope-shape result for the bearer-auth code paths: no key leak, no bearer leak, in either the synthetic 401 envelopes or the success-response paths. This complements `tests/test_no_key_leakage.py`, which runs the same assertions in-process and as subprocess invocations during CI.
+
+### 19.7 Tag convention
+
+A namespaced git tag was created and pushed for this release, completing the convention now established across every package in this monorepo:
+
+```
+iflow-search-openapi/v0.1.0a0  →  commit 2db2a6d
+```
+
+Confirmed on the remote via `git ls-remote --tags origin`. The full release tag set for the `v0.1.0a0` cycle is:
+
+```
+v0.1.0a0                          (core, bare per [[release-tag-convention]])
+iflow-search-mcp/v0.1.0a0
+iflow-search-langchain/v0.1.0a0
+iflow-search-openapi/v0.1.0a0
+```
+
+### 19.8 Constraints honoured throughout
+
+- No real API key was ever written to the repository, committed to git, or printed to stdout. The smoke output shows only the redacted form.
+- No `.env` file or other on-disk credential store was introduced. `IFLOW_API_KEY` was sourced from the developer's shell environment only.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts; the four sha256 digests (local / TestPyPI / PyPI for each of wheel and sdist) all match.
+- No CI workflow was modified to publish. Every upload to TestPyPI and PyPI was a manual, audited `twine upload`.
+- `~/.pypirc` was never read by tooling other than `twine`. The release flow performed no `cat` / `head` / `less` / `grep` against it.
+- `DEEPSEEK_API_KEY` was not read at any point in the release flow; the OpenAPI adapter has no LLM-provider coupling.
+- Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
+- The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag push was paused on the same gate.

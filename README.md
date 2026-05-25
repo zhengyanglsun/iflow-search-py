@@ -2,7 +2,7 @@
 
 Python SDK for the **iFlow Search API (心流搜索 API)** — web search, image search, and web-page fetching, returning structured data suitable for use by LLMs and AI agents.
 
-The framework-agnostic core SDK, the MCP adapter, and the LangChain adapter all ship from this repository. The remaining planned adapter (OpenAPI) will live in `packages/` as a sibling.
+The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the OpenAPI tool server all ship from this repository as sibling packages under `packages/`.
 
 ## Links
 
@@ -19,7 +19,7 @@ The framework-agnostic core SDK, the MCP adapter, and the LangChain adapter all 
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0a0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0a0`
-- ⏳ Planned adapter (not yet implemented): `iflow-search-openapi`
+- ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a0`
 
 ## Installation
 
@@ -121,6 +121,7 @@ iflow-search-py/
 ├── docs/design/python-sdk-design.md       ← core design document
 ├── docs/design/python-mcp-design.md       ← MCP adapter design document
 ├── docs/design/python-langchain-design.md ← LangChain adapter design document
+├── docs/design/python-openapi-design.md   ← OpenAPI adapter design document
 ├── packages/
 │   ├── iflow-search/                      ← core SDK (PyPI: iflow-search)
 │   │   ├── src/iflow_search/
@@ -136,8 +137,15 @@ iflow-search-py/
 │   │   ├── pyproject.toml
 │   │   ├── README.md                      ← PyPI long_description
 │   │   └── LICENSE
-│   └── iflow-search-langchain/            ← LangChain adapter (PyPI: iflow-search-langchain)
-│       ├── src/iflow_search_langchain/
+│   ├── iflow-search-langchain/            ← LangChain adapter (PyPI: iflow-search-langchain)
+│   │   ├── src/iflow_search_langchain/
+│   │   ├── tests/
+│   │   ├── scripts/smoke_real_api.py
+│   │   ├── pyproject.toml
+│   │   ├── README.md                      ← PyPI long_description
+│   │   └── LICENSE
+│   └── iflow-search-openapi/              ← OpenAPI tool server (PyPI: iflow-search-openapi)
+│       ├── src/iflow_search_openapi/
 │       ├── tests/
 │       ├── scripts/smoke_real_api.py
 │       ├── pyproject.toml
@@ -220,9 +228,17 @@ tools = create_iflow_search_tools(api_key=os.environ["IFLOW_API_KEY"])
 
 Each tool uses `response_format="content_and_artifact"`: `_run` / `_arun` return `(content: str, artifact: dict)`. Auto-built clients carry `IFlow-Source: langchain` attribution; caller-supplied clients are not mutated. The package's own README covers configuration, attribution, lifecycle, and the LangGraph example; see `docs/design/python-langchain-design.md` for the design rationale.
 
-### Planned
+### `iflow-search-openapi` — published
 
-- `iflow-search-openapi` — FastAPI / OpenAPI server for Open WebUI, Coze, and similar platforms.
+FastAPI / OpenAPI 3.1 tool server for Open WebUI, Coze, and similar platforms that consume OpenAPI tool catalogues. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as `POST /tools/*` endpoints; serves `/openapi.json` and `/health`.
+
+```bash
+pip install --pre iflow-search-openapi
+export IFLOW_API_KEY="your-api-key"
+iflow-search-openapi
+```
+
+Default bind is `127.0.0.1:8787` (local-only). Set `IFLOW_OPENAPI_HOST=0.0.0.0` for LAN / container exposure. Optional bearer auth for external callers via `IFLOW_OPENAPI_AUTH_TOKEN`; configurable CORS via `IFLOW_OPENAPI_CORS_ORIGIN`. The package's own README covers configuration and per-platform import flows; see `docs/design/python-openapi-design.md` for the design rationale.
 
 See `docs/design/python-sdk-design.md` for the core design rationale.
 
