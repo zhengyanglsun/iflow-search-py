@@ -13,7 +13,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 
 ## Status
 
-- ✅ Core SDK implemented (`packages/iflow-search/`) — published on PyPI as `iflow-search==0.1.0a0`
+- ✅ Core SDK implemented (`packages/iflow-search/`) — published on PyPI as `iflow-search==0.1.0`
 - ✅ Sync and async clients
 - ✅ Real-API smoke verified for all three endpoints
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
@@ -24,10 +24,10 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 ## Installation
 
 ```bash
-pip install --pre iflow-search
+pip install iflow-search
 ```
 
-`--pre` is required while the version is still a PEP 440 pre-release (`0.1.0a0`). Without it, `pip` will report "no matching distribution".
+`iflow-search-mcp`, `iflow-search-langchain`, and `iflow-search-openapi` are still in PEP 440 prerelease and require `pip install --pre <package>`.
 
 For local development:
 

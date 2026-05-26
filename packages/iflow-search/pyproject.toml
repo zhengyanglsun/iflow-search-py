@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "iflow-search"
-version = "0.1.0a0"
+version = "0.1.0"
 description = "Python SDK for iFlow Search (心流搜索) — web search, image search, and web-page fetching."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{ name = "iFlow Search SDK contributors" }]
 keywords = ["iflow", "search", "web-search", "image-search", "ai", "llm"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",

@@ -4,17 +4,15 @@ Python SDK for **iFlow Search (心流搜索)** — a search API that exposes web
 
 - **Product:** <https://platform.iflow.cn/>
 - **API docs:** <https://platform.iflow.cn/docs/>
-- **Status:** alpha pre-release (`0.1.0a0`), published on PyPI. Requires `--pre` to install — the Python analog of npm's `next` dist-tag.
+- **Status:** stable (`0.1.0`), published on PyPI.
 
 This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. The MCP adapter (`iflow-search-mcp`), the LangChain adapter (`iflow-search-langchain`), and the FastAPI / OpenAPI adapter (`iflow-search-openapi`) all ship from the same repository and depend on this package.
 
 ## Install
 
 ```bash
-pip install --pre iflow-search
+pip install iflow-search
 ```
-
-`--pre` is required while the version is still a pre-release. Without it, `pip` will report "no matching distribution".
 
 For local development:
 
