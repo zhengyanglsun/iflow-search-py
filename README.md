@@ -19,15 +19,13 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0`
-- ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a2`
+- ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0`
 
 ## Installation
 
 ```bash
 pip install iflow-search
 ```
-
-`iflow-search-openapi` is still in PEP 440 prerelease and requires `pip install --pre iflow-search-openapi`.
 
 For local development:
 
@@ -233,7 +231,7 @@ Each tool uses `response_format="content_and_artifact"`: `_run` / `_arun` return
 FastAPI / OpenAPI 3.1 tool server for Open WebUI, Coze, and similar platforms that consume OpenAPI tool catalogues. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as `POST /tools/*` endpoints; serves `/openapi.json` and `/health`.
 
 ```bash
-pip install --pre iflow-search-openapi
+pip install iflow-search-openapi
 export IFLOW_API_KEY="your-api-key"
 iflow-search-openapi
 ```

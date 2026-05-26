@@ -5,15 +5,13 @@ OpenAPI 3.1 tool server for **iFlow Search (心流搜索)** — exposes `iflow_w
 - **Core SDK:** [`iflow-search`](https://pypi.org/project/iflow-search/) — this package wraps it; do not skip installing it (it is a transitive dependency, so `pip install` handles it).
 - **Sibling adapters:** [`iflow-search-mcp`](https://pypi.org/project/iflow-search-mcp/) (MCP stdio server), [`iflow-search-langchain`](https://pypi.org/project/iflow-search-langchain/) (LangChain tools).
 - **API docs:** <https://platform.iflow.cn/docs/>
-- **Status:** alpha pre-release (`0.1.0a2`). Requires `pip install --pre`.
+- **Status:** stable (`0.1.0`).
 
 ## Install
 
 ```bash
-pip install --pre iflow-search-openapi
+pip install iflow-search-openapi
 ```
-
-`--pre` is required while the version is still a PEP 440 prerelease.
 
 ## Run
 
@@ -25,7 +23,7 @@ iflow-search-openapi
 Output (stderr):
 
 ```
-[iflow-search-openapi] v0.1.0a2 listening on http://127.0.0.1:8787 — bearer auth DISABLED (open mode)
+[iflow-search-openapi] v0.1.0 listening on http://127.0.0.1:8787 — bearer auth DISABLED (open mode)
 ```
 
 By default the server binds **`127.0.0.1:8787`** — local-only. Set `IFLOW_OPENAPI_HOST=0.0.0.0` to expose it to a LAN or a container network. See [Configuration](#configuration) for the full env list.
