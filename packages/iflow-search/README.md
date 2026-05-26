@@ -6,7 +6,7 @@ Python SDK for **iFlow Search (心流搜索)** — a search API that exposes web
 - **API docs:** <https://platform.iflow.cn/docs/>
 - **Status:** alpha pre-release (`0.1.0a0`), published on PyPI. Requires `--pre` to install — the Python analog of npm's `next` dist-tag.
 
-This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. The MCP adapter (`iflow-search-mcp`) ships from the same repository and depends on this package; LangChain and FastAPI/OpenAPI adapters are planned.
+This is the framework-agnostic **core** SDK: it has zero LangChain / MCP / FastAPI dependencies. The MCP adapter (`iflow-search-mcp`), the LangChain adapter (`iflow-search-langchain`), and the FastAPI / OpenAPI adapter (`iflow-search-openapi`) all ship from the same repository and depend on this package.
 
 ## Install
 
@@ -179,9 +179,9 @@ The script:
 
 This package is the core. Adapter packages depend on it and live in the same repository:
 
-- `iflow-search-mcp` — **published** on PyPI. MCP stdio server for Claude Code / Claude Desktop / Hermes / iFlow CLI. Install with `pip install --pre iflow-search-mcp`.
-- `iflow-search-langchain` — planned. LangChain (and LangGraph) tools.
-- `iflow-search-openapi` — planned. FastAPI OpenAPI server for Open WebUI / Coze.
+- `iflow-search-mcp` — **published** on PyPI. MCP stdio server for Claude Code, Claude Desktop, Hermes, OpenCode, and other MCP-capable hosts. Install with `pip install --pre iflow-search-mcp`.
+- `iflow-search-langchain` — **published** on PyPI. LangChain (and LangGraph) tools; usable from CrewAI via a one-line `BaseTool` subclass. Install with `pip install --pre iflow-search-langchain`.
+- `iflow-search-openapi` — **published** on PyPI. FastAPI / OpenAPI 3.1 tool server for Open WebUI, Coze, and other OpenAPI tool catalogues. Install with `pip install --pre iflow-search-openapi`.
 
 ## License
 

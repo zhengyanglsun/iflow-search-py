@@ -1103,3 +1103,9 @@ All three tags point at `chore(openapi): bump version to ...` commits whose arti
 - `DEEPSEEK_API_KEY` was not read at any point in the release flow.
 - Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
 - The PyPI upload boundary was paused for explicit "go" per [[release-flow-pause-at-irreversible]]; the tag creation and tag push were paused on the same gate. The image-search re-smoke was also gated on explicit "go" before being run against the live API.
+
+---
+
+## 22. Scope decision — OpenAPI 3.0 companion endpoint deferred
+
+OpenAPI 3.0 companion endpoint is deferred; the canonical server remains OpenAPI 3.1.0. Add a companion route only if a downstream importer requires it after 0.1.x.

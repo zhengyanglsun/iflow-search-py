@@ -18,11 +18,11 @@ The core has no LangChain / MCP / FastAPI dependencies. Adapter packages may be 
 |---|---|---|
 | Core SDK | `iflow-search` | `iflow_search` |
 
-Planned adapter packages (not yet published):
+Adapter packages published from this monorepo:
 
 - `iflow-search-langchain` — LangChain (and LangGraph) tools.
 - `iflow-search-mcp` — MCP stdio server.
-- `iflow-search-openapi` — FastAPI / OpenAPI server.
+- `iflow-search-openapi` — FastAPI / OpenAPI 3.1 tool server.
 
 Reuse rules:
 
@@ -251,9 +251,9 @@ There is no API for users to set raw HTTP headers. This is a deliberate restrict
 | Adapter | `IFlow-Source` | `IFlow-Integration` |
 |---|---|---|
 | `iflow-search` (used directly) | `python` | `iflow-search` |
-| `iflow-search-langchain` (planned) | `langchain` | `iflow-search-langchain` |
-| `iflow-search-mcp` (planned) | `mcp` | `iflow-search-mcp` |
-| `iflow-search-openapi` (planned) | `openapi` | `iflow-search-openapi` |
+| `iflow-search-langchain` | `langchain` | `iflow-search-langchain` |
+| `iflow-search-mcp` | `mcp` | `iflow-search-mcp` |
+| `iflow-search-openapi` | `openapi` | `iflow-search-openapi` |
 
 ---
 
@@ -397,3 +397,40 @@ The smoke script `scripts/smoke_real_api.py` exercises the three endpoints again
 ### 11.2 Secret-leak protocol
 
 If a real API key ever leaks into a published artifact: rotate the key at the iFlow platform first, *then* yank the affected PyPI release, then publish a fix. PyPI does not permit delete-and-republish of the same version, so the fix is always a new version.
+
+---
+
+## 12. Release verification — 0.1.0a0
+
+This section records the evidence we *do* have for the `0.1.0a0` PyPI release of `iflow-search`, and is explicit about what was **not** captured at release time. It is meant to be the template for the stable `0.1.0` release record, at which point the gaps below must be filled in before the upload step.
+
+### 12.1 Artifacts
+
+- Published on PyPI as `iflow-search 0.1.0a0` (sdist + wheel).
+- Reachable via `pip install --pre iflow-search==0.1.0a0`.
+- **sha256 of the published sdist / wheel: not recorded at release time.** Future stable bumps must capture these from `python -m build` output and pin them in this section before upload.
+
+### 12.2 CI gate
+
+- The pre-publish branch passed the standard CI matrix (`ruff check`, `mypy src/iflow_search`, `pytest`, `python -m build`) across Python 3.10 – 3.13, per `.github/workflows/ci.yml`. The exact run URL was not pinned in this document.
+
+### 12.3 Cold-install matrix
+
+- **Not recorded at release time.** The pre-publish checklist (§11.1) requires a TestPyPI cold-install into a fresh `/tmp` venv, but the matrix (which Python versions / which OS) was not pinned. Future stable bumps must record the Python × OS combinations that were exercised cold.
+
+### 12.4 Real-API smoke
+
+- A real-API smoke is shipped at `scripts/smoke_real_api.py`, gated behind `IFLOW_SMOKE=1`, and documented in the package README (`packages/iflow-search/README.md` § "Real-API smoke"). It exercises `web_search`, `image_search`, and `web_fetch` end-to-end against the live iFlow platform.
+- Per the same README, the script is opt-in, reads `IFLOW_API_KEY` from the environment only, redacts the key in all log output, and does not write any file.
+- The release-time output of this script was not captured in this repository.
+
+### 12.5 Tag
+
+- Git tag for this release: bare `v0.1.0a0`, per the tag convention (core uses bare; adapters use `<pkg>/v<version>`).
+- Tagged commit: `46742b9`, dated 2026-05-22.
+
+### 12.6 Constraints honoured
+
+- API key was read from `os.environ` only; no `.env` autoloading, no CLI flag, no filesystem path other than the process environment, per architectural invariant #7.
+- `~/.pypirc` was not read by any in-repo automation. Upload credentials were supplied by the operator out of band.
+- No `Co-Authored-By: Claude` trailer was added to the release commit.

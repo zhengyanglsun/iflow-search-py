@@ -187,7 +187,7 @@ The smoke script:
 
 ### `iflow-search-mcp` — published
 
-MCP stdio server for use by Claude Code, Claude Desktop, Hermes, and other MCP-capable hosts. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as MCP tools over the official Python `mcp` SDK.
+MCP stdio server for use by Claude Code, Claude Desktop, Hermes, OpenCode, and other MCP-capable hosts. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as MCP tools over the official Python `mcp` SDK.
 
 ```bash
 pip install --pre iflow-search-mcp
