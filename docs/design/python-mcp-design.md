@@ -583,3 +583,139 @@ This means Phase 3 (true end-to-end `tools/call` driven by OpenCode's LLM agent 
 - Real OpenCode config (`~/.config/opencode`, `~/Library/Application Support/opencode`, `~/.opencode`, `~/Library/Caches/opencode`) was not modified by the test; pre- and post-test enumeration confirmed unchanged or absent state on each.
 - Leakage scan across all Phase 1 + Phase 2 captured files (stdout, stderr, wrapper-evidence log, transient `opencode.json`, and OpenCode's internal SQLite / log files under the temp `XDG_*`) found zero literal-key occurrences, zero `sk-…` tokens, zero `Bearer …` matches.
 - No source-code change, no version bump, no PyPI re-upload, no git tag, no commit, no push performed for this verification.
+
+## 17. Release verification — `0.1.0` stable (2026-05-26)
+
+First non-prerelease of the MCP adapter. This record fills the gaps §14 deliberately left open: artifact digests are pinned, both the TestPyPI and PyPI cold installs are recorded, and the hermetic stdio smoke is captured end-to-end against the installed wheel. Future stable bumps should follow this section's structure rather than §14's.
+
+### 17.1 Artifacts
+
+Both files were built once locally with `python -m build` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_mcp-0.1.0-py3-none-any.whl` | 15,185 B | `6b45e46dfae248637125da122c6a3d932a72d0f76c0071e9b7dff591041d3a83` |
+| `iflow_search_mcp-0.1.0.tar.gz` | 10,043 B | `2d4f5510d42c638fcea7c0383dcb348fefa32d081f50b3784641237379d2648c` |
+
+The digests were the same at every hop — local `dist/`, TestPyPI, PyPI — confirming bit-for-bit artifact identity end-to-end.
+
+### 17.2 Version / dependency / metadata changes
+
+Release commit: `12ab4ea chore(mcp): bump iflow-search-mcp to 0.1.0`. The five-file change set was scoped to packaging metadata and version assertions only — no source or test logic changed.
+
+| Field | Before | After |
+|---|---|---|
+| `pyproject.toml` `version` | `0.1.0a0` | `0.1.0` |
+| `pyproject.toml` `Development Status` classifier | `3 - Alpha` | `4 - Beta` |
+| `pyproject.toml` `dependencies` (core) | `iflow-search>=0.1.0a0,<0.2` | `iflow-search>=0.1.0,<0.2` |
+| `_version.py` `__version__` | `0.1.0a0` | `0.1.0` |
+| `tests/test_version.py` literal assertions | `0.1.0a0` | `0.1.0` |
+| Root `README.md` status + install | `0.1.0a0`, `pip install --pre iflow-search-mcp` | `0.1.0`, `pip install iflow-search-mcp` |
+| `packages/iflow-search-mcp/README.md` install | `pip install --pre iflow-search-mcp` | `pip install iflow-search-mcp` |
+
+Historical 0.1.0a0 references in §14, §15, and §16 of this design doc are preserved verbatim as the original release verification record.
+
+### 17.3 CI gate
+
+Run id `26436278766` — green, 16/16 jobs successful (4 packages × Python 3.10/3.11/3.12/3.13 matrix per `.github/workflows/ci.yml`). The release commit `12ab4ea` was the head of `main` at upload time.
+
+### 17.4 Local gates
+
+Run from `packages/iflow-search-mcp/` under the repo-root `.venv/`:
+
+| Gate | Result |
+|---|---|
+| `ruff check .` | pass |
+| `mypy src/iflow_search_mcp` | pass |
+| `pytest -q` | 56 passed |
+| `python -m build` | wheel + sdist produced (sizes/digests above) |
+| `python -m twine check dist/*` | PASSED for both files |
+
+`ruff format --check` was **not** enforced this release — eight pre-existing files (none touched by `12ab4ea`, all dating to the initial MVP commit `6debef0`) carry formatting drift since first publish, and CI does not run `ruff format --check`. Accepting this as documented pre-existing drift; future cleanup will land in a dedicated formatting-only commit. Same posture as core §13.2.
+
+### 17.5 TestPyPI cold install
+
+Source: <https://test.pypi.org/project/iflow-search-mcp/0.1.0/>.
+
+- Fresh venv: `/tmp/iflow-mcp-010-testpypi-verify` (CPython 3.11.15, created with `uv venv --python 3.11`).
+- Install command:
+  ```
+  uv pip install \
+      --index-url https://test.pypi.org/simple/ \
+      --extra-index-url https://pypi.org/simple/ \
+      --index-strategy unsafe-best-match \
+      iflow-search-mcp==0.1.0
+  ```
+- `--index-strategy unsafe-best-match` was required because uv's default single-index policy would otherwise pin `iflow-search-mcp` to PyPI (where only `0.1.0a0` existed at the time) and refuse to look at TestPyPI for the same package name. Same uv-side resolver setting noted for core in §13.3.
+- Resolved 31 packages; `iflow-search-mcp==0.1.0` came from TestPyPI and the transitive core `iflow-search==0.1.0` was already resolvable on PyPI (published in core's own stable release).
+- Provenance assertion: `iflow_search_mcp.__file__` resolved under `/tmp/iflow-mcp-010-testpypi-verify/lib/python3.11/site-packages/iflow_search_mcp/__init__.py`. `iflow_search_mcp.__version__ == "0.1.0"`, `iflow_search.__version__ == "0.1.0"`, `_version.INTEGRATION_NAME == "iflow-search-mcp"`, `_version.SOURCE == "mcp"`, `__all__ == ("__version__",)`.
+- Console script: `shutil.which("iflow-search-mcp")` resolved to `/tmp/iflow-mcp-010-testpypi-verify/bin/iflow-search-mcp`.
+- No-key startup (subprocess with `env={}`): exit 1, empty stdout, stderr `[iflow-search-mcp] configuration error: IFLOW_API_KEY is required and must be a non-empty string`, no `sk-` leak in either stream.
+- Venv removed after verification.
+
+### 17.6 Official PyPI cold install
+
+Source: <https://pypi.org/project/iflow-search-mcp/0.1.0/>.
+
+- Fresh venv: `/tmp/iflow-mcp-010-pypi-verify` (CPython 3.11.15, created with `uv venv --python 3.11`).
+- Install command (default index, no `--pre`, no extra-index override, no strategy override):
+  ```
+  uv pip install --refresh iflow-search-mcp==0.1.0
+  ```
+- Resolved 31 packages including `iflow-search-mcp==0.1.0` and `iflow-search==0.1.0` straight from PyPI — confirming that `0.1.0` is now the latest non-prerelease for both packages and that the `pip install iflow-search-mcp` quickstart in both READMEs is correct without any flag.
+- Provenance assertion: `iflow_search_mcp.__file__` resolved under `/private/tmp/iflow-mcp-010-pypi-verify/lib/python3.11/site-packages/iflow_search_mcp/__init__.py`. Same `__version__`, `_version`, and `__all__` checks as §17.5; console script resolved to the verify venv.
+- No-key startup behaviour identical to §17.5 (exit 1, empty stdout, `IFLOW_API_KEY` named in stderr, no `sk-` leak).
+- Venv removed after verification.
+
+### 17.7 Installed-package hermetic stdio smoke
+
+`scripts/smoke_stdio.py` (the offline fake-iFlow harness from §12) was run twice — once with the TestPyPI cold venv's Python (§17.5) and once with the PyPI cold venv's Python (§17.6), both invoking the script from the repo root with `IFLOW_MCP_SMOKE=1`. Each run spawns the `iflow-search-mcp` binary from the corresponding venv, points it at a `127.0.0.1` fake-iFlow HTTP server, and exercises the full MCP handshake plus `tools/call`.
+
+Both runs:
+
+- Banner on stderr: `[iflow-search-mcp] v0.1.0 ready on stdio.` (stdout strictly reserved for JSON-RPC framing — empty banner-side, no pollution).
+- `tools/list` returned `[iflow_web_search, iflow_image_search, iflow_web_fetch]` in declared order.
+- `tools/call("iflow_web_search", ...)`: `isError` falsy, `content[0].text` contained the canned title, `structuredContent.results[0].title == "Smoke result"`.
+- Fake iFlow recorded exactly 1 inbound request per run, with the §17.8 attribution headers intact.
+
+This is the same harness used at alpha-time (§14), but exercised end-to-end against the **installed wheel** rather than the source tree, proving the published artifact wires env → core constructor → outbound headers correctly.
+
+### 17.8 Attribution headers verified
+
+Inspected on the recorded fake-iFlow request for each smoke run in §17.7:
+
+| Header | Value |
+|---|---|
+| `iflow-source` | `mcp` |
+| `iflow-integration` | `iflow-search-mcp` |
+| `iflow-integration-version` | `0.1.0` |
+| `iflow-mcp-client` | `smoke-host` |
+| `iflow-mcp-client-version` | `9.9.9-smoke` |
+| `authorization` | `Bearer <IFLOW_API_KEY>` — value matched the env-supplied smoke key byte-for-byte |
+
+No additional first-party host re-smoke (Claude Code §15, OpenCode §16) was performed for this release; those sections remain the host-compatibility record for the published artifact's MCP wire protocol, which is unchanged between `0.1.0a0` and `0.1.0`.
+
+### 17.9 Tag
+
+```
+iflow-search-mcp/v0.1.0  →  commit 12ab4ea9b652a3606af52700488765e91e3f7d7f
+```
+
+- Annotated tag, message: `iflow-search-mcp 0.1.0 — first PyPI stable release`, with PyPI URL, both sha256 digests, dependency constraint, classifier, and verification summary embedded.
+- Remote tag object on `origin`: `1d441ae97cd20ed686aa5376248bc294ebe73935`; `^{}` deref points to `12ab4ea9…` (matches local).
+- Pushed as a single ref via `git push origin iflow-search-mcp/v0.1.0`; no `--tags`, no branch push.
+- The earlier prerelease tag `iflow-search-mcp/v0.1.0a0` (→ commit `6debef0`, tag object `7d39e97…`) was left untouched. Both tags follow the namespaced `<package-name>/v<version>` convention recorded in §14.5.
+
+### 17.10 Constraints honoured
+
+- No real iFlow API smoke ran for this release. The only end-to-end exercise of the published artifact was the hermetic stdio smoke (§17.7) against a local fake-iFlow HTTP server. Live-API host coverage carries over from §14.3 / §15 / §16 — the MCP wire protocol is unchanged between `0.1.0a0` and `0.1.0`.
+- `IFLOW_API_KEY` was never printed in any captured log; the no-key startup test (§17.5, §17.6) asserted both stdout and stderr were free of `sk-` substrings.
+- `DEEPSEEK_API_KEY` was not used at any step.
+- `~/.pypirc` was not read by any in-repo automation; only `test -f` plus `stat -f "%A %N"` (returning mode `600`) ran against it. Upload credentials were supplied by the operator out of band.
+- No `.env` file was created.
+- Wheel and sdist uploaded to TestPyPI and PyPI are bit-for-bit identical to local `dist/` — sha256 verified at every hop (§17.1).
+- Both cold-install venvs lived under `/tmp/`, were verified to load the package from `site-packages/` (not the working tree), and were removed after the smoke.
+- No CI workflow was modified to publish; both `twine upload` invocations were manual and audited. No PyPI re-upload of any other version, no other tag created or moved, no branch push during the release sequence.
+- No `Co-Authored-By: Claude` trailer was added to the release commit (`12ab4ea`) or to this docs-closure commit.
+- No source code, test, fixture, or `pyproject.toml` was modified by this docs-closure commit — the diff is strictly limited to `docs/design/python-mcp-design.md`.
+
