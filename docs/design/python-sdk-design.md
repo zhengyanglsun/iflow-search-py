@@ -434,3 +434,93 @@ This section records the evidence we *do* have for the `0.1.0a0` PyPI release of
 - API key was read from `os.environ` only; no `.env` autoloading, no CLI flag, no filesystem path other than the process environment, per architectural invariant #7.
 - `~/.pypirc` was not read by any in-repo automation. Upload credentials were supplied by the operator out of band.
 - No `Co-Authored-By: Claude` trailer was added to the release commit.
+
+---
+
+## 13. Release verification — `0.1.0` stable (2026-05-26)
+
+First non-prerelease of the core SDK. This record fills the gaps §12 deliberately left open: artifact digests are now pinned, both the TestPyPI and PyPI cold installs are recorded, and the real-API smoke output is captured. Future stable bumps should follow this section's structure rather than §12's.
+
+### 13.1 Artifacts
+
+Both files were built once locally with `python -m build` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search-0.1.0-py3-none-any.whl` | 20,751 B | `813eea2ed21eddb10f9af65cccf901e7c946a0b26bafe72a534f84949032bc9d` |
+| `iflow_search-0.1.0.tar.gz` | 14,230 B | `633294dd621d2e83ca2ae90a38dce3f48c17acc9681675dbe935b3fbaf2c196a` |
+
+The digests were the same at every hop — local `dist/`, TestPyPI, PyPI — confirming bit-for-bit artifact identity end-to-end.
+
+### 13.2 CI gate
+
+Release commit: `5b80159 chore(core): bump iflow-search to 0.1.0`.
+
+The standard CI matrix (`ruff check`, `mypy src/iflow_search`, `pytest`, `python -m build`) ran green across the 4 packages × Python 3.10/3.11/3.12/3.13 matrix, per `.github/workflows/ci.yml`. Run id `26430356585` reports 16/16 jobs successful. The release commit was the head of `main` at upload time.
+
+`ruff format --check` was **not** enforced this release — six pre-existing files (none touched by `5b80159`) carried formatting drift since the initial MVP commit `69c8045`, and CI does not run `ruff format --check`. Accepting this as documented pre-existing drift; future cleanup will land in a dedicated formatting-only commit.
+
+### 13.3 TestPyPI cold install
+
+Source: <https://test.pypi.org/project/iflow-search/0.1.0/>.
+
+- Fresh venv: `/tmp/iflow-core-010-testpypi-verify` (CPython 3.11.15, created with `uv venv --python 3.11`).
+- Install command:
+  ```
+  uv pip install \
+      --index-url https://test.pypi.org/simple/ \
+      --extra-index-url https://pypi.org/simple/ \
+      --index-strategy unsafe-best-match \
+      iflow-search==0.1.0
+  ```
+- `--index-strategy unsafe-best-match` was required because uv's default single-index policy would otherwise pin `iflow-search` to PyPI (where only `0.1.0a0` existed at the time) and refuse to look at TestPyPI for the same package name. The flag is a uv-side resolver setting only; it does not change anything on either index.
+- Resolved 12 packages; `iflow-search==0.1.0` came from TestPyPI and the runtime dependencies (`httpx`, `pydantic`, etc.) came from PyPI as intended.
+- Provenance assertion: `iflow_search.__file__` resolved under `/private/tmp/iflow-core-010-testpypi-verify/lib/python3.11/site-packages/iflow_search/__init__.py`, proving the published wheel was being tested and not an editable working copy. `iflow_search.__version__ == "0.1.0"` (asserted, not printed-and-eyeballed).
+- Venv removed after verification.
+
+### 13.4 Official PyPI cold install
+
+Source: <https://pypi.org/project/iflow-search/0.1.0/>.
+
+- Fresh venv: `/tmp/iflow-core-010-pypi-verify` (CPython 3.11.15, created with `uv venv --python 3.11`).
+- Install command (default index, no `--pre`, no extra-index override, no strategy override):
+  ```
+  uv pip install --refresh iflow-search==0.1.0
+  ```
+- Resolved 12 packages including `iflow-search==0.1.0` straight from PyPI — confirming that `0.1.0` is now the latest non-prerelease and that the `pip install iflow-search` quickstart in the README is correct without any flag.
+- Provenance assertion: `iflow_search.__file__` resolved under `/private/tmp/iflow-core-010-pypi-verify/lib/python3.11/site-packages/iflow_search/__init__.py`. `iflow_search.__version__ == "0.1.0"`, both client classes (`IFlowSearchClient`, `AsyncIFlowSearchClient`) importable.
+- Venv removed after verification.
+
+### 13.5 Real-API smoke
+
+`scripts/smoke_real_api.py` ran twice against the live iFlow API — once from the TestPyPI cold venv (§13.3) and once from the PyPI cold venv (§13.4) — both times with `IFLOW_SMOKE=1` and `IFLOW_API_KEY` sourced from the parent shell env only.
+
+| Step | TestPyPI venv `took_ms` | PyPI venv `took_ms` | Result |
+|---|---|---|---|
+| `web_search(query="flash attention", count=3)` | 1540 | 1544 | 3 organic results, 2xx + `success=true` |
+| `image_search(query="great wall of china", count=3)` | 1638 | 1456 | 3 images (snake_case `image_url`/`source_url`), 2xx + `success=true` |
+| `web_fetch(url="https://zh.wikipedia.org/wiki/Wiki")` | 246 | 296 | `from_cache=True`, 5,163-char body, 2xx + `success=true` |
+
+Both runs ended with `[smoke] all three endpoints returned 2xx + success=true. ✅`. Latencies are typical (~1.5 s for search, sub-second cached fetch); no rate-limit hits, no auth errors. The script's own `[smoke] api key: sk-e***16` redaction was the only key reference in either log.
+
+### 13.6 Tag
+
+```
+iflow-search/v0.1.0  →  commit 5b80159d4f35b5eec777d95711de11ef7fdcd964
+```
+
+- Annotated tag, message: `iflow-search 0.1.0 — first stable core release`.
+- Remote tag object on `origin`: `a36b86edb80c57ad4f9522cf25bcc426a5f9bd4c`; `^{}` deref points to `5b80159…` (matches local).
+- Pushed as a single ref via `git push origin iflow-search/v0.1.0`; no `--tags`, no branch push.
+
+**Tag convention departure from §12.5.** The earlier alpha used the bare form `v0.1.0a0`. This stable release adopts the namespaced form `iflow-search/v<version>`, aligning the core SDK with the "going forward" rule recorded in `docs/design/python-mcp-design.md` §14.5 (every package in this monorepo uses `<package-name>/v<version>`). The legacy bare `v0.1.0a0` tag is left in place as a historical artifact and is not retroactively renamed.
+
+### 13.7 Constraints honoured
+
+- API key was read from `os.environ` only — no `.env` autoload, no CLI flag, no on-disk credential store. The script's own redaction (`sk-e***16`) was the only key reference in any captured log; no full key ever printed.
+- `DEEPSEEK_API_KEY` was not used at any step.
+- `~/.pypirc` was not read by any in-repo automation; only `test -f` plus `stat -f "%A %N"` (returning mode `600`) ran against it. Upload credentials were supplied by the operator out of band.
+- Wheel and sdist uploaded to TestPyPI and PyPI are bit-for-bit identical to local `dist/` — sha256 verified at every hop (§13.1).
+- Both cold-install venvs lived under `/tmp/`, were verified to load the package from `site-packages/` (not the working tree), and were removed after the smoke.
+- No CI workflow was modified to publish; both `twine upload` invocations were manual and audited. No PyPI re-upload of any other version.
+- No `Co-Authored-By: Claude` trailer was added to the release commit (`5b80159`) or to this docs-closure commit.
