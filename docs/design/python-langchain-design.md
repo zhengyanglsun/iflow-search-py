@@ -510,3 +510,98 @@ The convention `<package-name>/v<version>` is now established for every package 
 - `~/.pypirc` was created and edited by the developer in their own editor with tokens never entering tool I/O; the only filesystem checks performed against it were `test -f` and `stat -f %A` (mode = 600), never `cat` / `head` / `less` / `grep`.
 - `DEEPSEEK_API_KEY` was not read at any point in the release flow; the LangChain adapter has no LLM-provider coupling (§15.11).
 - Release commits omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
+
+## 17. Release verification — `0.1.0` stable (2026-05-26)
+
+Record of what was verified for the first stable PyPI release of `iflow-search-langchain`. Mirrors §16 of this document and §17 of the MCP design doc. Section §16 (the `0.1.0a0` prerelease record) is preserved verbatim above; this section captures the prerelease → stable transition.
+
+### 17.1 Artifacts
+
+Both files were built once locally with `python -m build` from commit `7d1cfd9` and uploaded byte-identically to TestPyPI and then PyPI. No rebuild between hops.
+
+| Artifact | Size | sha256 |
+|---|---|---|
+| `iflow_search_langchain-0.1.0-py3-none-any.whl` | 12,598 B | `65d28a462ae0eb3abac9ad705245997544744256a9027851a9710615be74b321` |
+| `iflow_search_langchain-0.1.0.tar.gz` | 9,538 B | `c09a21c97858e6e446a0868c87d5ca808c398a8737b735bd2570eab93b9d4496` |
+
+Hashes were compared against the `digests.sha256` field returned by the TestPyPI and PyPI JSON APIs (`/pypi/iflow-search-langchain/0.1.0/json`) at each hop. All four digests match.
+
+### 17.2 Version, dependency, and metadata changes vs. `0.1.0a0`
+
+The bump commit (`7d1cfd9`) touched only the version-bearing surfaces; no runtime code, tool schema, factory signature, or return shape changed.
+
+- `pyproject.toml`: `version = "0.1.0a0"` → `"0.1.0"`; `Development Status :: 3 - Alpha` → `4 - Beta`; runtime dep floor `iflow-search>=0.1.0a0,<0.2` → `>=0.1.0,<0.2`.
+- `src/iflow_search_langchain/_version.py`: `__version__ = "0.1.0a0"` → `"0.1.0"`.
+- `tests/test_version.py`: now asserts the version is PEP 440 stable (`\d+\.\d+\.\d+`, no `a/b/rc/.dev/.post` suffix) in addition to matching `pyproject.toml`.
+- READMEs (root and package): install snippet drops `--pre`; status line reflects stable.
+
+### 17.3 CI gate
+
+GitHub Actions run [`26440269469`](https://github.com/zhengyanglsun/iflow-search-py/actions/runs/26440269469) on commit `7d1cfd9` was the green CI that unblocked the publish flow. It exercised the full monorepo matrix:
+
+| Package | Python versions | Result |
+|---|---|---|
+| `iflow-search` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-mcp` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-langchain` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+| `iflow-search-openapi` | 3.10 / 3.11 / 3.12 / 3.13 | ✅ |
+
+16/16 jobs ran ruff, mypy strict, pytest, and `python -m build`. No CI job uploads anywhere — publishing remained manual `twine upload` only (§14.2).
+
+### 17.4 Cold-install matrix
+
+For each source, a fresh Python 3.11 venv was created in `/var/folders/.../iflow-langchain-010-*`, the package was installed via `uv pip install iflow-search-langchain==0.1.0` (no `--pre`, since the release is now PEP 440 stable), and both an **offline import smoke** and an **offline LangChain tool smoke** (mock `httpx` transport — see §17.5) were run.
+
+| Source | Index URL | Offline import smoke | Offline tool smoke |
+|---|---|---|---|
+| TestPyPI | `https://test.pypi.org/simple/` + PyPI as `--extra-index-url` for deps | ✅ | ✅ |
+| PyPI | default index (`--refresh` to bypass cache) | ✅ | ✅ |
+
+The TestPyPI install uses PyPI as `--extra-index-url` because the runtime dependency `iflow-search==0.1.0` only lives on PyPI; the same applies to `langchain-core` and `pydantic`. In both venvs, dependency resolution pulled `iflow-search==0.1.0` (stable, no `--pre`), confirming the dep-floor bump in §17.2 holds end-to-end.
+
+Offline import smoke asserted: `import iflow_search_langchain` succeeds with no API key set, `__version__ == "0.1.0"`, `__all__` exposes exactly the four factories plus `__version__`, and `create_iflow_web_search_tool()` raises `IFlowConfigError(code="missing_api_key")` at factory-call time rather than at first invocation.
+
+### 17.5 LangChain tool smoke on the installed wheel (offline, mock transport)
+
+The 0.1.0 stable release was verified end-to-end inside the cold PyPI venv by exercising the LangChain `BaseTool` contract against an `httpx.MockTransport` — no live API call, no `IFLOW_API_KEY` from the developer's shell. The script:
+
+- Imports `create_iflow_search_tools` from the PyPI-installed wheel.
+- Confirms the returned list contains exactly three `BaseTool` instances, in fixed order: `iflow_web_search`, `iflow_image_search`, `iflow_web_fetch`.
+- Confirms each tool has `response_format == "content_and_artifact"`.
+- Constructs a caller-supplied `IFlowSearchClient` with explicit langchain attribution (`source="langchain"`, `integration_name="iflow-search-langchain"`, `integration_version=iflow_search_langchain.__version__`) and an `httpx.Client(transport=httpx.MockTransport(handler))`, then passes it via `client=` so the factory does not auto-build (per §15.7, caller-supplied clients are not mutated).
+- Invokes `iflow_web_search._run(query="hello", count=2)` against the mock, asserts the returned `(content: str, artifact: dict)` tuple is shaped correctly, `artifact["results"]` is populated from the canned envelope, and `artifact["raw"]` carries the original response.
+
+All assertions passed against the wheel installed from PyPI. No real API key was used; no live HTTP request was made.
+
+### 17.6 Attribution headers verified offline
+
+The mock transport in §17.5 recorded the outbound request headers and asserted:
+
+- `IFlow-Source: langchain`
+- `IFlow-Integration: iflow-search-langchain`
+- `IFlow-Integration-Version: 0.1.0`
+- `Authorization: Bearer <test-key>` (synthetic key, never a real credential)
+
+This wire-verifies that the published wheel emits stable-release attribution end-to-end, including the version-string flip from `0.1.0a0` to `0.1.0`.
+
+### 17.7 Tag
+
+A namespaced annotated git tag was created and pushed for this release, in the convention established in §16.6:
+
+```
+iflow-search-langchain/v0.1.0
+  tag object   cdce8577bcff49ce27c6f3be4f708281e8e2c1c1
+  ↳ commit     7d1cfd95e4054740cf21c7f347afa114f07df472   (chore(langchain): bump iflow-search-langchain to 0.1.0)
+```
+
+The legacy `iflow-search-langchain/v0.1.0a0` tag remains in place pointing at commit `4270538` for historical reference. No existing tag was moved.
+
+### 17.8 Constraints honoured throughout
+
+- No real API key was ever printed, written to the repository, or committed. The offline tool smoke used the literal synthetic value `"test-key"`.
+- `DEEPSEEK_API_KEY` was not read at any point — the LangChain adapter has no LLM-provider coupling (§15.11), and the stable verification went one step further by replacing the live-API smoke with a mock-transport smoke.
+- `~/.pypirc` was not read via `cat` / `head` / `less` / `grep`; only `test -f` and `stat` (mode check) were performed. `twine upload --non-interactive` used the developer-managed credential store; tool output was scrubbed for any `pypi-`, `Bearer`, or `password` line before inspection.
+- The wheel and sdist uploaded to PyPI are bit-for-bit identical to the local `dist/` artifacts; the four sha256 digests (local / TestPyPI / PyPI for each of wheel and sdist) all match (§17.1).
+- No CI workflow was modified to publish. Every upload was a manual, audited `twine upload`.
+- No runtime code, public API, tool schema, factory signature, or return shape changed between `0.1.0a0` and `0.1.0` (§17.2). The transition is purely metadata + version.
+- The release commit (`7d1cfd9`) and this docs commit omit the `Co-Authored-By: Claude` trailer per the repository's commit-message convention.
