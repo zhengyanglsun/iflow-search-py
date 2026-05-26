@@ -505,3 +505,81 @@ This means the Claude-Code-side evidence is **discovery and stdio handshake**, n
 - No `.env` file was created.
 - Real Claude Code config (`~/.claude/`, `~/.claude.json`, `~/.config/claude*`, `~/Library/Caches/claude-cli-nodejs/`) was not modified by the test; all host-side state landed under the temp `HOME`.
 - No source-code change, no version bump, no PyPI re-upload, no git tag, no commit, no push performed for this verification.
+
+## 16. OpenCode direct host verification — `0.1.0a0` (2026-05-25)
+
+Follow-up host-compatibility check confirming the same already-published `iflow-search-mcp==0.1.0a0` artifact is discoverable and connectable from OpenCode (`sst/opencode`, a TUI / CLI agent host with its own MCP client implementation distinct from Claude Code's). Same approach as §15: no code, version, package metadata, or tag changed; the smoke ran entirely against the PyPI artifact installed into a throwaway venv.
+
+### 16.1 Environment
+
+- OpenCode CLI: `1.15.10`, installed via `brew install sst/tap/opencode` → `/opt/homebrew/bin/opencode`.
+- Cold venv: `/tmp/iflow-opencode-phase2/venv` (Python 3.11 via `uv venv --python 3.11`), populated with `pip install --pre iflow-search-mcp==0.1.0a0`. `iflow_search_mcp.__file__` resolved under that venv's `site-packages/`.
+- Isolated host state, all paths under `/tmp/iflow-opencode-phase2/`: `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and a temp project dir holding a transient `opencode.json`. Every `opencode` invocation went through `env -i` plus an explicit re-export so no inherited variable could leak in unintentionally.
+- The real `~/.config/opencode`, `~/Library/Application Support/opencode`, `~/.opencode`, and `~/Library/Caches/opencode` were neither read nor written. Confirmed afterward: the real-user `~/.config/opencode` directory mtime matched the pre-test snapshot, and the other three locations remained absent.
+
+### 16.2 What was verified
+
+Two independent transports of the same MCP handshake against the same installed artifact:
+
+**(a) Python `mcp` SDK reference client (Phase 1)** — `ClientSession` over `stdio_client` spawned the `iflow-search-mcp` console script directly, with `IFLOW_MCP_CLIENT=opencode` and `IFLOW_MCP_CLIENT_VERSION=phase1-baseline` set in the child env.
+
+- `initialize` → `serverInfo = {name: "iflow-search-mcp", version: "0.1.0a0"}`.
+- `tools/list` → `["iflow_web_search", "iflow_image_search", "iflow_web_fetch"]` (exact order; same schemas as §15.2).
+- `tools/call` ×3 against the live iFlow API: `iflow_web_search "latest LLM benchmarks 2026" count=3`, `iflow_image_search "great wall of china" count=3`, `iflow_web_fetch https://example.com` — all `isError: false`, single `TextContent` block each, no stdout pollution.
+- Attribution chain reached the API end-to-end: live requests succeeded carrying `IFlow-MCP-Client: opencode`, `IFlow-MCP-Client-Version: phase1-baseline`, `IFlow-Source: mcp`, `IFlow-Integration: iflow-search-mcp`, `IFlow-Integration-Version: 0.1.0a0`.
+
+**(b) OpenCode's own MCP discovery (Phase 2)** — `opencode mcp list` from the isolated project dir containing `opencode.json`. OpenCode spawns the configured local server, runs the MCP handshake, and reports connection state.
+
+- `opencode mcp list` → `iflow-search · connected · local`.
+- `opencode --log-level DEBUG mcp list` → `service=mcp key=iflow-search toolCount=3` and `successfully created client`, confirming all three tools registered with no schema-load error.
+- `opencode mcp debug iflow-search` reported `MCP server iflow-search is not a remote server` — the subcommand is documented as an OAuth debugger for remote MCP servers; for `type: "local"` (stdio) entries it is not applicable, and this output is the expected refusal, not a failure. The stdio health check is `opencode mcp list` itself.
+
+### 16.3 OpenCode config-file shape and env-var handling
+
+Worth recording because OpenCode's MCP config differs from Claude Desktop's / Claude Code's in several small but trip-wire ways:
+
+|   | Claude Desktop / Claude Code | OpenCode 1.15.10 |
+|---|---|---|
+| Root key | `mcpServers` | `mcp` |
+| Server-type marker | none (transport inferred from shape) | explicit `"type": "local"` or `"remote"` |
+| `command` | string | string-array |
+| Env block key | `env` | `environment` |
+| `${VAR}` expansion in env block | yes | **no** (literal string passed through) |
+| Inherits parent process env into the MCP child | yes | yes |
+
+The `${VAR}`-not-expanded behaviour was verified with a sha-12 evidence wrapper: a config containing `"IFLOW_API_KEY": "${IFLOW_API_KEY}"` produced a wrapper-side hash that matched the literal string `${IFLOW_API_KEY}` (not the resolved key), while omitting `IFLOW_API_KEY` from the config entirely and exporting it in the parent shell produced a wrapper-side hash matching the real key. The wrapper recorded only `len` + `sha256[:12]` of the received value before `execvp`-ing the real binary; the key itself was never written.
+
+Practical consequence: with OpenCode, **`IFLOW_API_KEY` should be supplied from the parent shell, not written into `opencode.json`**. The recommended minimal shape is:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "iflow-search": {
+      "type": "local",
+      "command": ["iflow-search-mcp"],
+      "enabled": true,
+      "environment": {
+        "IFLOW_MCP_CLIENT": "opencode"
+      }
+    }
+  }
+}
+```
+
+This happens to align with the core SDK's hard rule that the API key never touches the filesystem (no `.env` auto-load, no config-file read for the key, see core design §3) — so the parent-shell pattern is the right default to recommend even on hosts that *do* support `${VAR}` expansion.
+
+### 16.4 What was deliberately not run
+
+OpenCode was **not** launched in `opencode run "..."` mode or any code path that runs the LLM agent loop. No LLM provider was configured under the synthetic `HOME`, and `DEEPSEEK_API_KEY` is explicitly disallowed by the project's smoke rules. The OpenCode-side evidence is therefore **discovery + stdio handshake**, mirroring §15.3. The `tools/call` evidence is from transport (a) (the Python `mcp` SDK reference client), which exercises the same JSON-RPC wire protocol OpenCode would use once an LLM decides to invoke a tool.
+
+This means Phase 3 (true end-to-end `tools/call` driven by OpenCode's LLM agent loop) is **not attempted, not failed** — it is blocked on the project not having an authorised LLM provider key available for this kind of smoke. When such authorisation exists, the remaining gap is small: OpenCode has already proven (b) it can register the tools, and Phase 1 has already proven (a) `tools/call` over the same MCP wire protocol works against the live API.
+
+### 16.5 Constraints honoured
+
+- `IFLOW_API_KEY` was read once from the parent shell env; never inlined in `opencode.json`, never echoed, redacted out of every captured log shown to the operator. The sha-12 evidence wrapper recorded only hash-derived metadata of the key (length, first 12 hex of sha256, two boolean predicates) and immediately `execvp`'d the real binary.
+- `DEEPSEEK_API_KEY` was not used. No other LLM provider key was set under the synthetic `HOME`.
+- No `.env` file was created.
+- Real OpenCode config (`~/.config/opencode`, `~/Library/Application Support/opencode`, `~/.opencode`, `~/Library/Caches/opencode`) was not modified by the test; pre- and post-test enumeration confirmed unchanged or absent state on each.
+- Leakage scan across all Phase 1 + Phase 2 captured files (stdout, stderr, wrapper-evidence log, transient `opencode.json`, and OpenCode's internal SQLite / log files under the temp `XDG_*`) found zero literal-key occurrences, zero `sk-…` tokens, zero `Bearer …` matches.
+- No source-code change, no version bump, no PyPI re-upload, no git tag, no commit, no push performed for this verification.

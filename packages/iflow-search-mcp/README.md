@@ -65,6 +65,45 @@ reference-client smoke against the live iFlow API; see
 [`docs/design/python-mcp-design.md` §15](https://github.com/zhengyanglsun/iflow-search-py/blob/main/docs/design/python-mcp-design.md#15-claude-code-direct-host-verification--010a0-2026-05-25)
 for the full record.
 
+### Example: OpenCode
+
+OpenCode's MCP config schema differs from Claude Desktop's in a few small
+ways: the root key is `mcp` (not `mcpServers`), each server declares
+`type: "local"` for stdio transport, `command` is a string-array (not a
+string), and the env block is named `environment` (not `env`). OpenCode
+does **not** expand `${VAR}` references in that block, but it does
+inherit the parent process env into the MCP child — so `IFLOW_API_KEY`
+belongs in the shell you launch `opencode` from, not in `opencode.json`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "iflow-search": {
+      "type": "local",
+      "command": ["iflow-search-mcp"],
+      "enabled": true,
+      "environment": {
+        "IFLOW_MCP_CLIENT": "opencode"
+      }
+    }
+  }
+}
+```
+
+OpenCode 1.15.10 (installed via `brew install sst/tap/opencode`) has been
+verified to discover and connect to the `0.1.0a0` artifact via
+`opencode mcp list` — reports `connected · local`, and
+`opencode --log-level DEBUG mcp list` records `toolCount=3` and
+`successfully created client`. `opencode mcp debug` is documented as an
+OAuth debugger for remote MCP servers and is not applicable to
+`type: "local"` (stdio) entries; the stdio health check is
+`opencode mcp list` itself. The wire protocol used by `tools/call` is
+exercised separately by the reference-client smoke against the live
+iFlow API; see
+[`docs/design/python-mcp-design.md` §16](https://github.com/zhengyanglsun/iflow-search-py/blob/main/docs/design/python-mcp-design.md#16-opencode-direct-host-verification--010a0-2026-05-25)
+for the full record.
+
 ## Behavior
 
 - **Transport:** stdio only. `stdout` is reserved for the JSON-RPC stream;
