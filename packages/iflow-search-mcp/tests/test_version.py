@@ -9,7 +9,7 @@ from __future__ import annotations
 def test_package_exports_version() -> None:
     import iflow_search_mcp
 
-    assert iflow_search_mcp.__version__ == "0.1.0a0"
+    assert iflow_search_mcp.__version__ == "0.1.0"
 
 
 def test_version_module_constants() -> None:
@@ -19,7 +19,7 @@ def test_version_module_constants() -> None:
         __version__,
     )
 
-    assert __version__ == "0.1.0a0"
+    assert __version__ == "0.1.0"
     assert INTEGRATION_NAME == "iflow-search-mcp"
     assert SOURCE == "mcp"
 

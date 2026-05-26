@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "iflow-search-mcp"
-version = "0.1.0a0"
+version = "0.1.0"
 description = "MCP (Model Context Protocol) stdio server for iFlow Search (心流搜索) — exposes web_search, image_search, and web_fetch as MCP tools."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{ name = "iFlow Search SDK contributors" }]
 keywords = ["iflow", "search", "mcp", "model-context-protocol", "ai", "llm"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -27,7 +27,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "iflow-search>=0.1.0a0,<0.2",
+    "iflow-search>=0.1.0,<0.2",
     "mcp>=1.27,<2.0",
 ]
 

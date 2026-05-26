@@ -7,7 +7,7 @@ can emit the correct ``IFlow-Source``, ``IFlow-Integration``, and
 
 from __future__ import annotations
 
-__version__: str = "0.1.0a0"
+__version__: str = "0.1.0"
 INTEGRATION_NAME: str = "iflow-search-mcp"
 SOURCE: str = "mcp"
 

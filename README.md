@@ -17,7 +17,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 - ✅ Sync and async clients
 - ✅ Real-API smoke verified for all three endpoints
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
-- ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0a0`
+- ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0a0`
 - ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a2`
 
@@ -27,7 +27,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 pip install iflow-search
 ```
 
-`iflow-search-mcp`, `iflow-search-langchain`, and `iflow-search-openapi` are still in PEP 440 prerelease and require `pip install --pre <package>`.
+`iflow-search-langchain` and `iflow-search-openapi` are still in PEP 440 prerelease and require `pip install --pre <package>`.
 
 For local development:
 
@@ -190,7 +190,7 @@ The smoke script:
 MCP stdio server for use by Claude Code, Claude Desktop, Hermes, OpenCode, and other MCP-capable hosts. Exposes `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch` as MCP tools over the official Python `mcp` SDK.
 
 ```bash
-pip install --pre iflow-search-mcp
+pip install iflow-search-mcp
 ```
 
 Configure your MCP host to launch the `iflow-search-mcp` console script. Example for Claude Desktop's `claude_desktop_config.json`:

@@ -20,14 +20,13 @@ stdio entry point.
 ## Install
 
 ```bash
-pip install --pre iflow-search-mcp
+pip install iflow-search-mcp
 ```
 
-> The package is currently published as a PEP 440 prerelease (`0.1.0a0`), so
-> the `--pre` flag is required. Installing pulls in the MCP Python SDK, which
-> transitively depends on `starlette`, `uvicorn`, `sse-starlette`,
-> `python-multipart`, `pyjwt[crypto]`, and `jsonschema` — even though this
-> server only uses stdio. There is no `[stdio]` extra on the upstream package.
+> Installing pulls in the MCP Python SDK, which transitively depends on
+> `starlette`, `uvicorn`, `sse-starlette`, `python-multipart`,
+> `pyjwt[crypto]`, and `jsonschema` — even though this server only uses
+> stdio. There is no `[stdio]` extra on the upstream package.
 
 ## Configure your MCP host
 
