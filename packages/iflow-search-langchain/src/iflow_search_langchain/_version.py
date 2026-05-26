@@ -6,6 +6,6 @@ The value here must match ``[project].version`` in ``pyproject.toml``.
 
 from __future__ import annotations
 
-__version__ = "0.1.0a0"
+__version__ = "0.1.0"
 
 __all__ = ["__version__"]

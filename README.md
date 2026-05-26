@@ -18,7 +18,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 - ✅ Real-API smoke verified for all three endpoints
 - ✅ pytest / ruff / mypy strict / `python -m build` all green
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0`
-- ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0a0`
+- ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0`
 - ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0a2`
 
 ## Installation
@@ -27,7 +27,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 pip install iflow-search
 ```
 
-`iflow-search-langchain` and `iflow-search-openapi` are still in PEP 440 prerelease and require `pip install --pre <package>`.
+`iflow-search-openapi` is still in PEP 440 prerelease and requires `pip install --pre iflow-search-openapi`.
 
 For local development:
 
@@ -215,7 +215,7 @@ Recognised env vars: `IFLOW_API_KEY` (required), `IFLOW_BASE_URL`, `IFLOW_TIMEOU
 LangChain `BaseTool` factories for `iflow_web_search`, `iflow_image_search`, and `iflow_web_fetch`. LangGraph consumes these tools directly (`create_react_agent`, `ToolNode`), so there is no separate `iflow-search-langgraph` package.
 
 ```bash
-pip install --pre iflow-search-langchain
+pip install iflow-search-langchain
 ```
 
 ```python

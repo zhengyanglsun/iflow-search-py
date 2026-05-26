@@ -5,15 +5,13 @@ LangChain (and LangGraph) tools for **iFlow Search (心流搜索)** — web sear
 - **Core SDK:** [`iflow-search`](https://pypi.org/project/iflow-search/) — this package wraps it; do not skip installing it.
 - **Sibling adapter:** [`iflow-search-mcp`](https://pypi.org/project/iflow-search-mcp/) — MCP stdio server.
 - **API docs:** <https://platform.iflow.cn/docs/>
-- **Status:** alpha pre-release (`0.1.0a0`). Requires `pip install --pre`.
+- **Status:** stable (`0.1.0`).
 
 ## Install
 
 ```bash
-pip install --pre iflow-search-langchain
+pip install iflow-search-langchain
 ```
-
-`--pre` is required while the version is still a PEP 440 prerelease.
 
 ## Quick start — agent with all three tools
 
@@ -147,7 +145,7 @@ If you want your LangChain-driven traffic correctly attributed:
       api_key=...,
       source="langchain",
       integration_name="iflow-search-langchain",
-      integration_version="0.1.0a0",
+      integration_version="0.1.0",
   )
   ```
 
@@ -185,7 +183,7 @@ async def main() -> None:
         # ... use tools ...
 ```
 
-## What's not included in v0.1.0a0
+## What's not included in v0.1.0
 
 - `BaseRetriever`, `BaseLoader`, `BaseToolkit` — tools only.
 - A separate `iflow-search-langgraph` package — LangGraph consumes the tools above directly.

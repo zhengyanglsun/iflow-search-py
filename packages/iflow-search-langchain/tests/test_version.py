@@ -1,4 +1,4 @@
-"""__version__ matches pyproject.toml and PEP 440 prerelease pattern."""
+"""__version__ matches pyproject.toml and is a PEP 440 stable release."""
 
 from __future__ import annotations
 
@@ -21,7 +21,10 @@ def test_version_matches_pyproject() -> None:
     assert __version__ == pyproject["project"]["version"]
 
 
-def test_version_is_pep440_prerelease() -> None:
-    assert re.fullmatch(r"\d+\.\d+\.\d+(a|b|rc)\d+", __version__), (
-        f"{__version__!r} is not a PEP 440 prerelease — package is still alpha"
+def test_version_is_pep440_stable() -> None:
+    assert re.fullmatch(r"\d+\.\d+\.\d+", __version__), (
+        f"{__version__!r} is not a PEP 440 stable release"
+    )
+    assert not re.search(r"(a|b|rc|\.dev|\.post)\d+", __version__), (
+        f"{__version__!r} carries a prerelease/dev/post suffix — package is no longer alpha"
     )
