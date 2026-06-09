@@ -20,7 +20,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, the Cre
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0`
 - ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0`
-- 🚧 CrewAI adapter (`packages/iflow-search-crewai/`) — `iflow-search-crewai` (in development)
+- ✅ CrewAI adapter (`packages/iflow-search-crewai/`) — published on PyPI as `iflow-search-crewai==0.1.0`
 
 ## Installation
 

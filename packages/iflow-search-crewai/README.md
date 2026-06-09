@@ -1,5 +1,7 @@
 # iflow-search-crewai
 
+[![PyPI version](https://img.shields.io/pypi/v/iflow-search-crewai)](https://pypi.org/project/iflow-search-crewai/)
+
 CrewAI tools for **iFlow Search (心流搜索)** — web search, image search, and web-page fetching, exposed as native `crewai.tools.BaseTool` instances.
 
 This package is a **CrewAI-native Python tool adapter**. It is **not** a CrewAI Studio / AMP official provider tile. To appear as a first-class “iFlow Search” integration inside CrewAI’s product UI, a separate official partnership / Catalog / Marketplace route is required.
