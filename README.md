@@ -2,7 +2,7 @@
 
 Python SDK for the **iFlow Search API (心流搜索 API)** — web search, image search, and web-page fetching, returning structured data suitable for use by LLMs and AI agents.
 
-The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the OpenAPI tool server all ship from this repository as sibling packages under `packages/`.
+The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, the CrewAI adapter, and the OpenAPI tool server all ship from this repository as sibling packages under `packages/`.
 
 ## Links
 
@@ -20,6 +20,7 @@ The framework-agnostic core SDK, the MCP adapter, the LangChain adapter, and the
 - ✅ MCP adapter (`packages/iflow-search-mcp/`) — published on PyPI as `iflow-search-mcp==0.1.0`
 - ✅ LangChain adapter (`packages/iflow-search-langchain/`) — published on PyPI as `iflow-search-langchain==0.1.0`
 - ✅ OpenAPI tool server (`packages/iflow-search-openapi/`) — published on PyPI as `iflow-search-openapi==0.1.0`
+- 🚧 CrewAI adapter (`packages/iflow-search-crewai/`) — `iflow-search-crewai` (in development)
 
 ## Installation
 
